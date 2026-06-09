@@ -1,0 +1,32 @@
+[workspace]
+resolver = "2"
+members = [
+  "crates/ahrs",
+  "crates/airframe",
+  "crates/control",
+  "crates/elrs",
+  "crates/eskf",
+  "crates/imu",
+  "crates/indi",
+  "crates/kinematics",
+  "crates/lis3mdl",
+  "crates/lps25hb",
+  "crates/madgwick",
+  "crates/math",
+  "crates/mcp3208",
+  "crates/navigation",
+  "crates/pwm",
+  "crates/stabilization",
+  "crates/tecs",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+
+[workspace.dependencies]
+embedded-hal = "1.0"
+fugit = "0.4"
+heapless = "0.9"
+libm = "0.2"

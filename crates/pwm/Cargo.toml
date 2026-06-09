@@ -1,0 +1,20 @@
+[package]
+name = "pwm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+embedded-hal = { workspace = true }
+fugit = { workspace = true }
+libm = { workspace = true }
+
+[dev-dependencies]
+control = { path = "../control" }
+
+[target.'thumbv8m.main-none-eabihf'.dependencies]
+panic-halt = "1.0"
+
+[target.'thumbv8m.main-none-eabihf'.dependencies.rp235x-hal]
+version = "0.4"
+features = ["binary-info", "critical-section-impl", "rt"]

@@ -1,0 +1,9 @@
+[package]
+name = "eskf"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+fugit = { workspace = true }
+math = { path = "../math" }

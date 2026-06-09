@@ -1,0 +1,8 @@
+[package]
+name = "lis3mdl"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+embedded-hal = { workspace = true }

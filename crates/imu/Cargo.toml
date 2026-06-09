@@ -1,0 +1,26 @@
+[package]
+name = "imu"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+embedded-hal = { workspace = true }
+fugit = { workspace = true }
+libm = { workspace = true }
+madgwick = { path = "../madgwick" }
+math = { path = "../math" }
+navigation = { path = "../navigation" }
+
+[dev-dependencies]
+lis3mdl = { path = "../lis3mdl" }
+
+[target.'thumbv8m.main-none-eabihf'.dependencies]
+linked_list_allocator = "0.10"
+lis3mdl = { path = "../lis3mdl" }
+lsm6ds3tr = "0.2"
+panic-halt = "1.0"
+
+[target.'thumbv8m.main-none-eabihf'.dependencies.rp235x-hal]
+version = "0.4"
+features = ["binary-info", "critical-section-impl", "rt"]

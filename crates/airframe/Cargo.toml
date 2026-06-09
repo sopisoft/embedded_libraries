@@ -1,0 +1,53 @@
+[package]
+name = "airframe"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[example]]
+name = "elrs_attitude_hold_pipeline"
+required-features = ["cascade-pid"]
+
+[[example]]
+name = "elevon_attitude_hold"
+required-features = ["cascade-pid"]
+
+[[example]]
+name = "vtail_attitude_hold"
+required-features = ["cascade-pid"]
+
+[[example]]
+name = "rp235x_elrs_imu_attitude_hold"
+required-features = ["cascade-pid"]
+
+[[example]]
+name = "indi_attitude_hold_pipeline"
+required-features = ["indi"]
+
+[dependencies]
+control = { path = "../control" }
+elrs = { path = "../elrs" }
+embedded-hal = { workspace = true }
+fugit = { workspace = true }
+indi = { path = "../indi", optional = true }
+math = { path = "../math" }
+pwm = { path = "../pwm" }
+stabilization = { path = "../stabilization", optional = true }
+
+[dev-dependencies]
+imu = { path = "../imu" }
+lis3mdl = { path = "../lis3mdl" }
+
+[target.'thumbv8m.main-none-eabihf'.dependencies]
+linked_list_allocator = "0.10"
+lsm6ds3tr = "0.2.2"
+panic-halt = "1.0"
+
+[target.'thumbv8m.main-none-eabihf'.dependencies.rp235x-hal]
+version = "0.4"
+features = ["binary-info", "critical-section-impl", "rt"]
+
+[features]
+default = ["cascade-pid"]
+cascade-pid = ["dep:stabilization"]
+indi = ["dep:indi"]

@@ -1,0 +1,12 @@
+[package]
+name = "navigation"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+embedded-hal = { workspace = true }
+fugit = { workspace = true }
+kinematics = { path = "../kinematics" }
+libm = { workspace = true }
+math = { path = "../math" }

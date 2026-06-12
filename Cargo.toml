@@ -18,6 +18,7 @@ members = [
   "crates/pwm",
   "crates/stabilization",
   "crates/tecs",
+  "crates/tsd10",
 ]
 
 [workspace.package]
@@ -27,6 +28,7 @@ license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
 embedded-hal = "1.0"
+embedded-io = "0.7"
 fugit = "0.4"
 heapless = "0.9"
 libm = "0.2"

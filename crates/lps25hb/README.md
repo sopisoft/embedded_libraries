@@ -1,6 +1,6 @@
 # lps25hb
 
-`embedded-hal` 1.0 driver for the ST LPS25HB barometer used on the Akizuki `AE-LPS25HB` DIP module and similar breakouts.
+`embedded-hal` 1.0 driver for the ST LPS25HB barometer used on the Akizuki `AE-LPS25HB` (`LPS25HB使用 気圧センサーモジュールDIP化キット`) and similar breakouts.
 
 ## What This Crate Contains
 

@@ -1124,6 +1124,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "tsd10"
+version = "0.1.0"
+dependencies = [
+ "embedded-io",
+ "panic-halt",
+ "rp235x-hal",
+]
+
+[[package]]
 name = "typenum"
 version = "1.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

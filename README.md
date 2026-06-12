@@ -13,13 +13,14 @@ The workspace is split into small crates so applications can depend only on the 
 - `indi`: simplified Incremental Nonlinear Dynamic Inversion rate control
 - `imu`: shared-bus helpers and 9-DoF estimation glue
 - `lis3mdl`: LIS3MDL driver
-- `lps25hb`: LPS25HB barometer driver and altitude helpers
+- `lps25hb`: LPS25HB barometer driver for the Akizuki `AE-LPS25HB` module, with altitude helpers
 - `control`: RC shaping, PID control, and control-surface mixers
 - `stabilization`: cascaded attitude and rate control
 - `tecs`: Total Energy Control System for altitude and airspeed hold
 - `airframe`: ELRS input to actuator-command glue for conventional, elevon, and V-tail aircraft
 - `pwm`: servo and ESC PWM helpers
 - `mcp3208`: MCP3208 SPI ADC driver
+- `tsd10`: TSD10 UART LiDAR driver and frame parser
 - `elrs`: CRSF / ELRS frames, parser, RC channels, telemetry, and parameter helpers
 
 Detailed usage notes live in each crate root `README.md`.

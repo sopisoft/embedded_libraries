@@ -14,6 +14,7 @@ The workspace is split into small crates so applications can depend only on the 
 - `imu`: shared-bus helpers and 9-DoF estimation glue
 - `lis3mdl`: LIS3MDL driver
 - `lps25hb`: LPS25HB barometer driver for the Akizuki `AE-LPS25HB` module, with altitude helpers
+- `mis2500`: MIS-2500-015G / MIS-2500-015V analog pressure driver
 - `control`: RC shaping, PID control, and control-surface mixers
 - `stabilization`: cascaded attitude and rate control
 - `tecs`: Total Energy Control System for altitude and airspeed hold

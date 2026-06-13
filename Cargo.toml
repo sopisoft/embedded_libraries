@@ -14,6 +14,7 @@ members = [
   "crates/madgwick",
   "crates/math",
   "crates/mcp3208",
+  "crates/mis2500",
   "crates/navigation",
   "crates/pwm",
   "crates/stabilization",

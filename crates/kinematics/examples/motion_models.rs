@@ -1,6 +1,7 @@
 use fugit::MicrosDurationU32;
+use glam::{Vec2, Vec3};
 use kinematics::{FixedWingState, MotionState2, MotionState3, coordinated_turn_rate};
-use math::{EulerAngles, Pose2, Pose3, Twist2, Twist3, Vec2, Vec3};
+use kinematics::{Pose2, Pose3, Twist2, Twist3};
 
 fn main() {
     // This example shows three different motion models:
@@ -52,12 +53,12 @@ fn main() {
     // - horizontal wind estimate,
     // - gyro turn rate for attitude propagation.
     let mut aircraft = FixedWingState::new();
-    let banked_turn = EulerAngles::from_degrees(20.0, 0.0, 45.0);
+    let banked_turn = Vec3::new(20.0f32.to_radians(), 0.0, 45.0f32.to_radians());
     aircraft.set_euler(banked_turn);
 
     let airspeed_m_s = 25.0;
     let wind_xy = Vec2::new(4.0, -1.5);
-    let yaw_rate = coordinated_turn_rate(banked_turn.roll, airspeed_m_s, 9.80665);
+    let yaw_rate = coordinated_turn_rate(banked_turn.x, airspeed_m_s, 9.80665);
 
     for _ in 0..50 {
         aircraft.step_with_airspeed(

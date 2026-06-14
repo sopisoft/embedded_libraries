@@ -2,7 +2,6 @@ use airframe::{AttitudeHoldLimits, ElevonController, ElevonServoMap, RcInputConf
 use control::{ElevonMixer, PidController};
 use elrs::RcChannels;
 use fugit::MicrosDurationU32;
-use math::{EulerAngles, Vec3};
 use pwm::{ServoRange, ServoSet};
 use stabilization::{AxisErrorMode, CascadeAttitudeController, CascadeAxis};
 
@@ -67,8 +66,12 @@ fn main() {
 
     let output = controller.update_selected(
         pilot,
-        EulerAngles::from_degrees(5.0, 1.0, 20.0),
-        Vec3::new(0.10, -0.02, 0.01),
+        airframe::Attitude::new(
+            5.0f32.to_radians(),
+            1.0f32.to_radians(),
+            20.0f32.to_radians(),
+        ),
+        airframe::Vector3::new(0.10, -0.02, 0.01),
         MicrosDurationU32::from_millis(10),
     );
 

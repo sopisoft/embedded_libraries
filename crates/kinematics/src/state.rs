@@ -1,8 +1,10 @@
 //! Generic motion state integration.
 
 use fugit::MicrosDurationU32;
+use glam::{Quat, Vec2, Vec3};
 use libm::sincosf;
-use math::{Pose2, Pose3, Twist2, Twist3, Vec2, Vec3};
+
+use crate::{Pose2, Pose3, Twist2, Twist3};
 
 /// Planar position, velocity, and yaw-rate state.
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -20,7 +22,7 @@ impl MotionState2 {
     pub const fn new(pose: Pose2) -> Self {
         Self {
             pose,
-            velocity: Vec2::zero(),
+            velocity: Vec2::ZERO,
             angular_velocity: 0.0,
         }
     }
@@ -54,8 +56,8 @@ impl MotionState3 {
     pub const fn new(pose: Pose3) -> Self {
         Self {
             pose,
-            velocity: Vec3::zero(),
-            angular_velocity: Vec3::zero(),
+            velocity: Vec3::ZERO,
+            angular_velocity: Vec3::ZERO,
         }
     }
 
@@ -68,8 +70,9 @@ impl MotionState3 {
         dt: MicrosDurationU32,
     ) {
         let dt = dt.as_secs_f32();
-        self.pose.orientation = self.pose.orientation.integrate_gyro(gyro_rad_s, dt);
-        let accel_world = self.pose.orientation.rotate_vec3(accel_body) + gravity_world;
+        self.pose.orientation =
+            (self.pose.orientation * Quat::from_scaled_axis(gyro_rad_s * dt)).normalize();
+        let accel_world = self.pose.orientation.mul_vec3(accel_body) + gravity_world;
         self.pose.position += self.velocity * dt + accel_world * (0.5 * dt * dt);
         self.velocity += accel_world * dt;
         self.angular_velocity = gyro_rad_s;
@@ -79,7 +82,7 @@ impl MotionState3 {
     pub fn step_twist(&mut self, twist: Twist3, dt: MicrosDurationU32) {
         let dt = dt.as_secs_f32();
         self.pose.integrate_twist(twist, dt);
-        self.velocity = self.pose.orientation.rotate_vec3(twist.linear);
+        self.velocity = self.pose.orientation.mul_vec3(twist.linear);
         self.angular_velocity = twist.angular;
     }
 }
@@ -95,7 +98,6 @@ mod tests {
     use super::*;
     use fugit::MicrosDurationU32;
     use libm::fabsf;
-    use math::{Pose2, Pose3, Quat, Twist2, Twist3};
 
     #[test]
     fn planar_state_updates() {
@@ -110,11 +112,11 @@ mod tests {
 
     #[test]
     fn spatial_state_updates_without_accel() {
-        let mut state = MotionState3::new(Pose3::new(Vec3::zero(), Quat::identity()));
+        let mut state = MotionState3::new(Pose3::new(Vec3::ZERO, Quat::IDENTITY));
         state.step_imu(
-            Vec3::zero(),
-            Vec3::zero(),
-            Vec3::zero(),
+            Vec3::ZERO,
+            Vec3::ZERO,
+            Vec3::ZERO,
             MicrosDurationU32::from_secs(1),
         );
         assert!(fabsf(state.pose.position.x) < 1.0e-6);
@@ -126,7 +128,7 @@ mod tests {
     fn spatial_twist_updates() {
         let mut state = MotionState3::new(Pose3::identity());
         state.step_twist(
-            Twist3::new(Vec3::new(1.0, 0.0, 0.0), Vec3::zero()),
+            Twist3::new(Vec3::new(1.0, 0.0, 0.0), Vec3::ZERO),
             MicrosDurationU32::from_secs(1),
         );
         assert!(fabsf(state.pose.position.x - 1.0) < 1.0e-6);

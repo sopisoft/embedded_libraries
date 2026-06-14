@@ -29,8 +29,8 @@ control = { path = "../control" }
 elrs = { path = "../elrs" }
 embedded-hal = { workspace = true }
 fugit = { workspace = true }
+glam = { workspace = true }
 indi = { path = "../indi", optional = true }
-math = { path = "../math" }
 pwm = { path = "../pwm" }
 stabilization = { path = "../stabilization", optional = true }
 

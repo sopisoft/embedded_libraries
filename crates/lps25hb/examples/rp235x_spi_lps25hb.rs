@@ -23,7 +23,6 @@
 mod embedded_example {
     use core::fmt::Write;
 
-    use embedded_hal::delay::DelayNs;
     use lps25hb::{
         Config, DEVICE_ID, Lps25hb, STANDARD_SEA_LEVEL_PRESSURE_HPA, pressure_to_altitude_m,
     };
@@ -41,6 +40,12 @@ mod embedded_example {
     const XTAL_FREQ_HZ: u32 = 12_000_000;
     const SEA_LEVEL_PRESSURE_HPA: f32 = STANDARD_SEA_LEVEL_PRESSURE_HPA;
 
+    fn wait_until(timer: &hal::Timer<hal::timer::CopyableTimer0>, deadline: hal::timer::Instant) {
+        while timer.get_counter() < deadline {
+            core::hint::spin_loop();
+        }
+    }
+
     #[hal::entry]
     fn main() -> ! {
         let mut pac = hal::pac::Peripherals::take().unwrap();
@@ -57,7 +62,7 @@ mod embedded_example {
         )
         .unwrap();
 
-        let mut timer = hal::Timer::new_timer0(pac.TIMER0, &mut pac.RESETS, &clocks);
+        let timer = hal::Timer::new_timer0(pac.TIMER0, &mut pac.RESETS, &clocks);
         let sio = hal::Sio::new(pac.SIO);
         let pins = hal::gpio::Pins::new(
             pac.IO_BANK0,
@@ -97,6 +102,8 @@ mod embedded_example {
         )
         .ok();
 
+        let period = hal::fugit::MicrosDurationU32::from_ticks(250_000);
+        let mut next_tick = timer.get_counter() + period;
         loop {
             let measurement = barometer.read_measurement().unwrap();
             let altitude_m =
@@ -107,7 +114,8 @@ mod embedded_example {
                 measurement.pressure_hpa, measurement.temperature_c, altitude_m,
             )
             .ok();
-            timer.delay_ms(250);
+            wait_until(&timer, next_tick);
+            next_tick += period;
         }
     }
 }

@@ -1,9 +1,10 @@
 use fugit::MicrosDurationU32;
 #[cfg(feature = "indi")]
 use indi::IndiAttitudeController;
-use math::{EulerAngles, Vec3, deg_to_rad};
 #[cfg(feature = "cascade-pid")]
 use stabilization::CascadeAttitudeController;
+
+use crate::{Attitude, Vector3};
 
 #[cfg(not(any(feature = "cascade-pid", feature = "indi")))]
 compile_error!("airframe needs either the `cascade-pid` or `indi` feature enabled");
@@ -19,8 +20,8 @@ pub type DefaultAttitudeController = IndiAttitudeController;
 /// Backend-independent attitude controller output.
 #[derive(Copy, Clone, Debug, Default, PartialEq)]
 pub struct AttitudeHoldOutput {
-    pub actuator: Vec3,
-    pub desired_rates_rad_s: Vec3,
+    pub actuator: Vector3,
+    pub desired_rates_rad_s: Vector3,
 }
 
 /// Pilot-stick-to-attitude limits for attitude-hold mode.
@@ -34,9 +35,9 @@ pub struct AttitudeHoldLimits {
 impl Default for AttitudeHoldLimits {
     fn default() -> Self {
         Self {
-            max_roll_rad: deg_to_rad(45.0),
-            max_pitch_rad: deg_to_rad(20.0),
-            max_yaw_rate_rad_s: deg_to_rad(90.0),
+            max_roll_rad: 45.0f32.to_radians(),
+            max_pitch_rad: 20.0f32.to_radians(),
+            max_yaw_rate_rad_s: 90.0f32.to_radians(),
         }
     }
 }
@@ -52,8 +53,8 @@ pub trait FixedWingAttitudeBackend {
         target_roll_rad: f32,
         target_pitch_rad: f32,
         target_yaw_rate_rad_s: f32,
-        measured_attitude: EulerAngles,
-        measured_rates_rad_s: Vec3,
+        measured_attitude: Attitude,
+        measured_rates_rad_s: Vector3,
         dt: MicrosDurationU32,
     ) -> AttitudeHoldOutput;
 }
@@ -69,8 +70,8 @@ impl FixedWingAttitudeBackend for CascadeAttitudeController {
         target_roll_rad: f32,
         target_pitch_rad: f32,
         target_yaw_rate_rad_s: f32,
-        measured_attitude: EulerAngles,
-        measured_rates_rad_s: Vec3,
+        measured_attitude: Attitude,
+        measured_rates_rad_s: Vector3,
         dt: MicrosDurationU32,
     ) -> AttitudeHoldOutput {
         let output = CascadeAttitudeController::update_fixed_wing(
@@ -100,8 +101,8 @@ impl FixedWingAttitudeBackend for IndiAttitudeController {
         target_roll_rad: f32,
         target_pitch_rad: f32,
         target_yaw_rate_rad_s: f32,
-        measured_attitude: EulerAngles,
-        measured_rates_rad_s: Vec3,
+        measured_attitude: Attitude,
+        measured_rates_rad_s: Vector3,
         dt: MicrosDurationU32,
     ) -> AttitudeHoldOutput {
         let output = IndiAttitudeController::update_fixed_wing(

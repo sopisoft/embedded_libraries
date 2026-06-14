@@ -1,7 +1,6 @@
 use control::{ControlAxes, ConventionalTailMixer};
 use fugit::MicrosDurationU32;
-use math::{EulerAngles, Vec3};
-use stabilization::{AxisErrorMode, CascadeAttitudeController, CascadeAxis};
+use stabilization::{Attitude, AxisErrorMode, CascadeAttitudeController, CascadeAxis, Vector3};
 
 fn main() {
     // This example shows a complete fixed-wing stabilization chain:
@@ -36,16 +35,20 @@ fn main() {
     let mut controller = CascadeAttitudeController::new(roll_axis, pitch_axis, yaw_axis);
 
     // Example target: a shallow right bank with a small nose-up pitch target.
-    let target_roll = math::deg_to_rad(20.0);
-    let target_pitch = math::deg_to_rad(5.0);
-    let target_yaw_rate = math::deg_to_rad(10.0);
+    let target_roll = 20.0f32.to_radians();
+    let target_pitch = 5.0f32.to_radians();
+    let target_yaw_rate = 10.0f32.to_radians();
 
     // Example estimate from your AHRS and gyro:
-    let measured_attitude = EulerAngles::from_degrees(8.0, 1.0, 15.0);
-    let measured_rates = Vec3::new(
-        math::deg_to_rad(12.0),
-        math::deg_to_rad(-2.0),
-        math::deg_to_rad(3.0),
+    let measured_attitude = Attitude::new(
+        8.0f32.to_radians(),
+        1.0f32.to_radians(),
+        15.0f32.to_radians(),
+    );
+    let measured_rates = Vector3::new(
+        12.0f32.to_radians(),
+        (-2.0f32).to_radians(),
+        3.0f32.to_radians(),
     );
 
     let dt = MicrosDurationU32::from_millis(10);
@@ -61,9 +64,9 @@ fn main() {
     // The inner loop produces generic roll / pitch / yaw control efforts.
     println!(
         "Desired body rates [deg/s]: roll={:.1}, pitch={:.1}, yaw={:.1}",
-        math::rad_to_deg(stabilized.desired_rates_rad_s.x),
-        math::rad_to_deg(stabilized.desired_rates_rad_s.y),
-        math::rad_to_deg(stabilized.desired_rates_rad_s.z)
+        stabilized.desired_rates_rad_s.x.to_degrees(),
+        stabilized.desired_rates_rad_s.y.to_degrees(),
+        stabilized.desired_rates_rad_s.z.to_degrees()
     );
     println!(
         "Controller outputs: roll={:.3}, pitch={:.3}, yaw={:.3}",

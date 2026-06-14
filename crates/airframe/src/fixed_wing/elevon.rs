@@ -1,9 +1,8 @@
 use control::{ControlAxes, ElevonMixer, ElevonOutputs};
 use fugit::MicrosDurationU32;
-use math::{EulerAngles, Vec3};
 use pwm::{ServoBank, ServoSet};
 
-use crate::PilotCommand;
+use crate::{Attitude, PilotCommand, Vector3};
 
 use super::{
     AttitudeHoldLimits, DefaultAttitudeController, FixedWingAttitudeBackend,
@@ -100,8 +99,8 @@ impl<const N: usize, C> ElevonController<N, C> {
     pub fn update_attitude_hold(
         &mut self,
         pilot: PilotCommand,
-        measured_attitude: EulerAngles,
-        measured_rates_rad_s: Vec3,
+        measured_attitude: Attitude,
+        measured_rates_rad_s: Vector3,
         dt: MicrosDurationU32,
     ) -> ElevonControlOutput<N>
     where
@@ -134,8 +133,8 @@ impl<const N: usize, C> ElevonController<N, C> {
     pub fn update_selected(
         &mut self,
         pilot: PilotCommand,
-        measured_attitude: EulerAngles,
-        measured_rates_rad_s: Vec3,
+        measured_attitude: Attitude,
+        measured_rates_rad_s: Vector3,
         dt: MicrosDurationU32,
     ) -> ElevonControlOutput<N>
     where

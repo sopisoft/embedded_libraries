@@ -1,7 +1,7 @@
 //! Shared trait for attitude estimators.
 
 use fugit::MicrosDurationU32;
-use math::{Quat, Vec3};
+use glam::{Quat, Vec3};
 
 /// Common interface for IMU-based attitude estimators.
 pub trait AttitudeEstimator {

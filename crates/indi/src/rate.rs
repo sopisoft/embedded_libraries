@@ -1,5 +1,5 @@
 use fugit::MicrosDurationU32;
-use math::Vec3;
+use glam::Vec3;
 
 use crate::{IndiAxis, IndiAxisConfig, IndiAxisInput, IndiAxisOutput};
 
@@ -18,7 +18,7 @@ impl IndiRateInput {
     pub const fn rates(target_rates_rad_s: Vec3, measured_rates_rad_s: Vec3) -> Self {
         Self {
             target_rates_rad_s,
-            target_angular_accel_rad_s2: Vec3::zero(),
+            target_angular_accel_rad_s2: Vec3::ZERO,
             measured_rates_rad_s,
             measured_angular_accel_rad_s2: None,
             actuator_feedback: None,

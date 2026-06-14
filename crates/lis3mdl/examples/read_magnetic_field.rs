@@ -30,7 +30,7 @@ fn main() {
     );
 
     // In a real AHRS pipeline you would usually convert those values into the
-    // vector type used by your math crate and feed them into a fusion filter.
+    // vector type used by your estimator and feed them into a fusion filter.
 }
 
 use core::convert::Infallible;

@@ -7,9 +7,9 @@ license.workspace = true
 [dependencies]
 embedded-hal = { workspace = true }
 fugit = { workspace = true }
+glam = { workspace = true }
 libm = { workspace = true }
 madgwick = { path = "../madgwick" }
-math = { path = "../math" }
 navigation = { path = "../navigation" }
 
 [dev-dependencies]

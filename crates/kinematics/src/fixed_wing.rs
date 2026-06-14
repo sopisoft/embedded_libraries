@@ -1,8 +1,10 @@
 //! Fixed-wing specific kinematic helpers.
 
 use fugit::MicrosDurationU32;
+use glam::{EulerRot, Quat, Vec2, Vec3};
 use libm::{sinf, tanf};
-use math::{EulerAngles, Pose3, Quat, Vec2, Vec3};
+
+use crate::Pose3;
 
 /// Fixed-wing state propagated from airspeed, attitude, and wind.
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -22,15 +24,16 @@ impl FixedWingState {
     pub const fn new() -> Self {
         Self {
             pose: Pose3::identity(),
-            ground_velocity: Vec3::zero(),
-            wind_xy: Vec2::zero(),
+            ground_velocity: Vec3::ZERO,
+            wind_xy: Vec2::ZERO,
             airspeed_m_s: 0.0,
         }
     }
 
     /// Sets the attitude from Euler angles.
-    pub fn set_euler(&mut self, euler: EulerAngles) {
-        self.pose.orientation = Quat::from_euler(euler);
+    pub fn set_euler(&mut self, euler_rad: Vec3) {
+        self.pose.orientation =
+            Quat::from_euler(EulerRot::XYZ, euler_rad.x, euler_rad.y, euler_rad.z);
     }
 
     /// Propagates the state using body attitude, airspeed, and horizontal wind.
@@ -42,14 +45,15 @@ impl FixedWingState {
         dt: MicrosDurationU32,
     ) {
         let dt = dt.as_secs_f32();
-        self.pose.orientation = self.pose.orientation.integrate_gyro(gyro_rad_s, dt);
+        self.pose.orientation =
+            (self.pose.orientation * Quat::from_scaled_axis(gyro_rad_s * dt)).normalize();
         self.airspeed_m_s = airspeed_m_s;
         self.wind_xy = wind_xy;
 
-        let air_velocity_world =
-            self.pose
-                .orientation
-                .rotate_vec3(Vec3::new(airspeed_m_s, 0.0, 0.0));
+        let air_velocity_world = self
+            .pose
+            .orientation
+            .mul_vec3(Vec3::new(airspeed_m_s, 0.0, 0.0));
         self.ground_velocity = Vec3::new(
             air_velocity_world.x + wind_xy.x,
             air_velocity_world.y + wind_xy.y,
@@ -90,8 +94,8 @@ mod tests {
         let mut state = FixedWingState::new();
         state.step_with_airspeed(
             20.0,
-            Vec2::zero(),
-            Vec3::zero(),
+            Vec2::ZERO,
+            Vec3::ZERO,
             MicrosDurationU32::from_secs(1),
         );
         assert!(fabsf(state.pose.position.x - 20.0) < 1.0e-6);

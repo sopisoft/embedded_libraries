@@ -10,7 +10,6 @@
 mod embedded_example {
     use core::fmt::Write;
 
-    use embedded_hal::delay::DelayNs;
     use mcp3208::{Channel, Mcp3208};
     use panic_halt as _;
     use rp235x_hal as hal;
@@ -25,6 +24,12 @@ mod embedded_example {
 
     const XTAL_FREQ_HZ: u32 = 12_000_000;
     const VREF_MV: u16 = 3300;
+
+    fn wait_until(timer: &hal::Timer<hal::timer::CopyableTimer0>, deadline: hal::timer::Instant) {
+        while timer.get_counter() < deadline {
+            core::hint::spin_loop();
+        }
+    }
 
     #[hal::entry]
     fn main() -> ! {
@@ -42,7 +47,7 @@ mod embedded_example {
         )
         .unwrap();
 
-        let mut timer = hal::Timer::new_timer0(pac.TIMER0, &mut pac.RESETS, &clocks);
+        let timer = hal::Timer::new_timer0(pac.TIMER0, &mut pac.RESETS, &clocks);
         let sio = hal::Sio::new(pac.SIO);
         let pins = hal::gpio::Pins::new(
             pac.IO_BANK0,
@@ -73,6 +78,8 @@ mod embedded_example {
         let mut adc = Mcp3208::new(spi, cs);
 
         writeln!(uart, "\r\nScanning MCP3208 channels on RP2350\r").ok();
+        let period = hal::fugit::MicrosDurationU32::from_ticks(1_000_000);
+        let mut next_tick = timer.get_counter() + period;
 
         loop {
             for channel_index in 0..8u8 {
@@ -82,7 +89,8 @@ mod embedded_example {
                 writeln!(uart, "CH{channel_index}: raw={raw:4} voltage={mv:4} mV\r").ok();
             }
             writeln!(uart, "\r").ok();
-            timer.delay_ms(1000);
+            wait_until(&timer, next_tick);
+            next_tick += period;
         }
     }
 }

@@ -2,16 +2,14 @@ mod support;
 
 use core::{cell::RefCell, convert::Infallible, fmt::Write};
 
-use airframe::{RcInputConfig, apply_subset_channels};
+use airframe::{RcInputConfig, Vector3, apply_subset_channels};
 use elrs::{
     FRAME_TYPE_RC_CHANNELS_PACKED, FRAME_TYPE_SUBSET_RC_CHANNELS_PACKED, FrameParser, RcChannels,
     SubsetRcChannels,
 };
-use embedded_hal::delay::DelayNs;
 use imu::{AccelGyroSample, MargEstimator, MargSample, SharedI2c};
 use lis3mdl::{Config as Lis3mdlConfig, Lis3mdl};
 use lsm6ds3tr::LSM6DS3TR;
-use math::{Vec3, deg_to_rad};
 use panic_halt as _;
 use pwm::{Servo, ServoBank, ServoOutput};
 use rp235x_hal as hal;
@@ -27,6 +25,12 @@ use support::{
 #[unsafe(link_section = ".start_block")]
 #[used]
 pub static IMAGE_DEF: hal::block::ImageDef = hal::block::ImageDef::secure_exe();
+
+fn wait_until(timer: &hal::Timer<hal::timer::CopyableTimer0>, deadline: hal::timer::Instant) {
+    while timer.get_counter() < deadline {
+        core::hint::spin_loop();
+    }
+}
 
 pub fn run() -> ! {
     init_heap();
@@ -44,7 +48,7 @@ pub fn run() -> ! {
     )
     .unwrap();
 
-    let mut timer = hal::Timer::new_timer0(pac.TIMER0, &mut pac.RESETS, &clocks);
+    let timer = hal::Timer::new_timer0(pac.TIMER0, &mut pac.RESETS, &clocks);
     let sio = hal::Sio::new(pac.SIO);
     let pins = hal::gpio::Pins::new(
         pac.IO_BANK0,
@@ -130,6 +134,8 @@ pub fn run() -> ! {
     let dt = fugit::MicrosDurationU32::from_millis(SAMPLE_PERIOD_MS);
     let mut estimator = MargEstimator::new(0.08);
     let mut report_divider = 0u8;
+    let tick_period = hal::fugit::MicrosDurationU32::from_ticks(SAMPLE_PERIOD_MS * 1_000);
+    let mut next_tick = timer.get_counter() + tick_period;
 
     writeln!(debug_uart, "\r\nIntegrated ELRS + IMU + servo example\r").ok();
 
@@ -157,17 +163,17 @@ pub fn run() -> ! {
         let accel_g = accel_gyro.read_accel().unwrap();
         let gyro_dps = accel_gyro.read_gyro().unwrap();
         let mag_mgauss = magnetometer.read_magnetic_mgauss().unwrap();
-        let gyro_rad_s = Vec3::new(
-            deg_to_rad(gyro_dps.x),
-            deg_to_rad(gyro_dps.y),
-            deg_to_rad(gyro_dps.z),
+        let gyro_rad_s = Vector3::new(
+            gyro_dps.x.to_radians(),
+            gyro_dps.y.to_radians(),
+            gyro_dps.z.to_radians(),
         );
         let sample = MargSample::new(
             AccelGyroSample::without_temperature(
-                Vec3::new(accel_g.x, accel_g.y, accel_g.z) * GRAVITY_M_S2,
+                Vector3::new(accel_g.x, accel_g.y, accel_g.z) * GRAVITY_M_S2,
                 gyro_rad_s,
             ),
-            Vec3::new(
+            Vector3::new(
                 mag_mgauss.x_mgauss,
                 mag_mgauss.y_mgauss,
                 mag_mgauss.z_mgauss,
@@ -196,9 +202,9 @@ pub fn run() -> ! {
                 debug_uart,
                 "mode={} roll={:>6.1} pitch={:>6.1} yaw={:>6.1} thr={:.2} ail={:.2}/{:.2} ele={:.2} rud={:.2}\r",
                 if pilot.attitude_hold_enabled { "hold" } else { "manual" },
-                euler_deg.roll,
-                euler_deg.pitch,
-                euler_deg.yaw,
+                euler_deg.x,
+                euler_deg.y,
+                euler_deg.z,
                 output.surfaces.throttle,
                 output.surfaces.left_aileron,
                 output.surfaces.right_aileron,
@@ -208,6 +214,7 @@ pub fn run() -> ! {
             .ok();
         }
 
-        timer.delay_ms(SAMPLE_PERIOD_MS);
+        wait_until(&timer, next_tick);
+        next_tick += tick_period;
     }
 }

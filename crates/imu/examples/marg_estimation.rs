@@ -1,6 +1,5 @@
 use fugit::MicrosDurationU32;
-use imu::{AccelGyroSample, MargEstimator, MargSample};
-use math::{Vec3, rad_to_deg};
+use imu::{AccelGyroSample, MargEstimator, MargSample, Vector3};
 
 fn main() {
     // This example demonstrates the intended layering:
@@ -16,16 +15,16 @@ fn main() {
     // - gyroscope sees no rotation,
     // - magnetometer points roughly along body X.
     let sample = MargSample::new(
-        AccelGyroSample::without_temperature(Vec3::new(0.0, 0.0, 9.80665), Vec3::zero()),
-        Vec3::unit_x(),
+        AccelGyroSample::without_temperature(Vector3::new(0.0, 0.0, 9.80665), Vector3::ZERO),
+        Vector3::X,
     );
 
     let estimate = estimator.update_marg(sample, dt);
     println!(
         "Euler [deg]: roll={:.2}, pitch={:.2}, yaw={:.2}",
-        rad_to_deg(estimate.euler.roll),
-        rad_to_deg(estimate.euler.pitch),
-        rad_to_deg(estimate.euler.yaw)
+        estimate.euler.x.to_degrees(),
+        estimate.euler.y.to_degrees(),
+        estimate.euler.z.to_degrees()
     );
     println!(
         "Relative altitude={:.4} m, vertical speed={:.4} m/s",

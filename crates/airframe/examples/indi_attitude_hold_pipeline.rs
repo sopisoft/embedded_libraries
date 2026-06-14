@@ -3,7 +3,6 @@ use control::ConventionalTailMixer;
 use elrs::RcChannels;
 use fugit::MicrosDurationU32;
 use indi::{IndiAttitudeConfig, IndiAttitudeController, IndiAxisConfig, IndiRateController};
-use math::{EulerAngles, Vec3};
 use pwm::{ServoRange, ServoSet};
 
 fn main() {
@@ -55,8 +54,12 @@ fn main() {
 
     let output = controller.update_selected(
         pilot,
-        EulerAngles::from_degrees(10.0, 2.0, 30.0),
-        Vec3::new(0.15, -0.05, 0.04),
+        airframe::Attitude::new(
+            10.0f32.to_radians(),
+            2.0f32.to_radians(),
+            30.0f32.to_radians(),
+        ),
+        airframe::Vector3::new(0.15, -0.05, 0.04),
         MicrosDurationU32::from_millis(10),
     );
 

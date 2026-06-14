@@ -2,7 +2,12 @@ use core::f32::consts::FRAC_PI_4;
 
 use eskf::Eskf;
 use fugit::MicrosDurationU32;
-use math::{EulerAngles, Quat, Vec3};
+use glam::{EulerRot, Quat, Vec3};
+
+fn euler_deg(q: Quat) -> Vec3 {
+    let (roll, pitch, yaw) = q.to_euler(EulerRot::XYZ);
+    Vec3::new(roll.to_degrees(), pitch.to_degrees(), yaw.to_degrees())
+}
 
 fn main() {
     // An ESKF is useful when you want to:
@@ -38,11 +43,16 @@ fn main() {
     filter.correct_forward_speed(20.5, 0.5);
     filter.correct_heading(FRAC_PI_4, 0.2);
     filter.correct_orientation(
-        Quat::from_euler(EulerAngles::from_degrees(2.0, -3.0, 45.0)),
+        Quat::from_euler(
+            EulerRot::XYZ,
+            2.0f32.to_radians(),
+            (-3.0f32).to_radians(),
+            45.0f32.to_radians(),
+        ),
         0.1,
     );
 
-    let attitude_deg = filter.orientation.to_euler().to_degrees();
+    let attitude_deg = euler_deg(filter.orientation);
     println!(
         "Position estimate: ({:.2}, {:.2}, {:.2}) m",
         filter.position.x, filter.position.y, filter.position.z
@@ -53,6 +63,6 @@ fn main() {
     );
     println!(
         "Attitude estimate: roll={:.2} deg, pitch={:.2} deg, yaw={:.2} deg",
-        attitude_deg.roll, attitude_deg.pitch, attitude_deg.yaw
+        attitude_deg.x, attitude_deg.y, attitude_deg.z
     );
 }

@@ -1,8 +1,8 @@
 //! Fixed-wing dead reckoning on top of the inertial navigator.
 
 use fugit::MicrosDurationU32;
+use glam::{EulerRot, Quat, Vec2, Vec3};
 use kinematics::FixedWingState;
-use math::{EulerAngles, Quat, Vec2, Vec3};
 
 use crate::InertialNavigator;
 
@@ -22,14 +22,15 @@ impl FixedWingNavigator {
     pub const fn new() -> Self {
         Self {
             navigator: InertialNavigator::new(),
-            wind_xy: Vec2::zero(),
+            wind_xy: Vec2::ZERO,
             airspeed_m_s: 0.0,
         }
     }
 
     /// Sets the attitude estimate directly from Euler angles.
-    pub fn set_attitude(&mut self, euler: EulerAngles) {
-        self.navigator.pose.orientation = Quat::from_euler(euler);
+    pub fn set_attitude(&mut self, euler_rad: Vec3) {
+        self.navigator.pose.orientation =
+            Quat::from_euler(EulerRot::XYZ, euler_rad.x, euler_rad.y, euler_rad.z);
     }
 
     /// Propagates position from airspeed, gyro, and wind.
@@ -45,7 +46,8 @@ impl FixedWingNavigator {
             .navigator
             .pose
             .orientation
-            .integrate_gyro(gyro_rad_s, dt_s);
+            .mul_quat(Quat::from_scaled_axis(gyro_rad_s * dt_s))
+            .normalize();
         self.airspeed_m_s = airspeed_m_s;
         self.wind_xy = wind_xy;
 
@@ -53,7 +55,7 @@ impl FixedWingNavigator {
             self.navigator
                 .pose
                 .orientation
-                .rotate_vec3(Vec3::new(airspeed_m_s, 0.0, 0.0));
+                .mul_vec3(Vec3::new(airspeed_m_s, 0.0, 0.0));
         self.navigator.velocity_world = Vec3::new(
             air_velocity_world.x + wind_xy.x,
             air_velocity_world.y + wind_xy.y,
@@ -68,7 +70,7 @@ impl FixedWingNavigator {
             self.navigator
                 .pose
                 .orientation
-                .rotate_vec3(Vec3::new(self.airspeed_m_s, 0.0, 0.0));
+                .mul_vec3(Vec3::new(self.airspeed_m_s, 0.0, 0.0));
         let observed_wind = Vec2::new(
             observed_ground_velocity.x - air_velocity_world.x,
             observed_ground_velocity.y - air_velocity_world.y,
@@ -104,8 +106,8 @@ mod tests {
         let mut nav = FixedWingNavigator::new();
         nav.predict_airspeed(
             15.0,
-            Vec3::zero(),
-            Vec2::zero(),
+            Vec3::ZERO,
+            Vec2::ZERO,
             MicrosDurationU32::from_secs(1),
         );
         assert!(fabsf(nav.navigator.pose.position.x - 15.0) < 1.0e-6);

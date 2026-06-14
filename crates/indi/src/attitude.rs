@@ -1,7 +1,18 @@
 use fugit::MicrosDurationU32;
-use math::{EulerAngles, Vec3, wrap_pi};
+use glam::Vec3;
 
 use crate::{IndiOutputs, IndiRateController, IndiRateInput};
+
+fn wrap_pi(angle_rad: f32) -> f32 {
+    let mut wrapped = angle_rad;
+    while wrapped > core::f32::consts::PI {
+        wrapped -= core::f32::consts::TAU;
+    }
+    while wrapped < -core::f32::consts::PI {
+        wrapped += core::f32::consts::TAU;
+    }
+    wrapped
+}
 
 /// Outer-loop configuration for attitude-hold mode.
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -32,7 +43,8 @@ pub struct IndiFixedWingInput {
     pub target_roll_rad: f32,
     pub target_pitch_rad: f32,
     pub target_yaw_rate_rad_s: f32,
-    pub measured_attitude: EulerAngles,
+    /// Euler attitude vector in roll, pitch, yaw order.
+    pub measured_attitude_rad: Vec3,
     pub measured_rates_rad_s: Vec3,
     pub measured_angular_accel_rad_s2: Option<Vec3>,
 }
@@ -66,15 +78,15 @@ impl IndiAttitudeController {
     /// Runs roll, pitch, and yaw attitude hold.
     pub fn update_attitude(
         &mut self,
-        target_attitude: EulerAngles,
-        measured_attitude: EulerAngles,
+        target_attitude_rad: Vec3,
+        measured_attitude_rad: Vec3,
         measured_rates_rad_s: Vec3,
         dt: MicrosDurationU32,
     ) -> IndiAttitudeOutput {
         let desired_rates_rad_s = Vec3::new(
-            self.attitude_rate_target(target_attitude.roll, measured_attitude.roll, 0),
-            self.attitude_rate_target(target_attitude.pitch, measured_attitude.pitch, 1),
-            self.attitude_rate_target(target_attitude.yaw, measured_attitude.yaw, 2),
+            self.attitude_rate_target(target_attitude_rad.x, measured_attitude_rad.x, 0),
+            self.attitude_rate_target(target_attitude_rad.y, measured_attitude_rad.y, 1),
+            self.attitude_rate_target(target_attitude_rad.z, measured_attitude_rad.z, 2),
         );
         self.update_rates(desired_rates_rad_s, measured_rates_rad_s, dt)
     }
@@ -85,7 +97,7 @@ impl IndiAttitudeController {
         target_roll_rad: f32,
         target_pitch_rad: f32,
         target_yaw_rate_rad_s: f32,
-        measured_attitude: EulerAngles,
+        measured_attitude_rad: Vec3,
         measured_rates_rad_s: Vec3,
         dt: MicrosDurationU32,
     ) -> IndiAttitudeOutput {
@@ -94,7 +106,7 @@ impl IndiAttitudeController {
                 target_roll_rad,
                 target_pitch_rad,
                 target_yaw_rate_rad_s,
-                measured_attitude,
+                measured_attitude_rad,
                 measured_rates_rad_s,
                 measured_angular_accel_rad_s2: None,
             },
@@ -109,8 +121,8 @@ impl IndiAttitudeController {
         dt: MicrosDurationU32,
     ) -> IndiAttitudeOutput {
         let desired_rates_rad_s = Vec3::new(
-            self.attitude_rate_target(input.target_roll_rad, input.measured_attitude.roll, 0),
-            self.attitude_rate_target(input.target_pitch_rad, input.measured_attitude.pitch, 1),
+            self.attitude_rate_target(input.target_roll_rad, input.measured_attitude_rad.x, 0),
+            self.attitude_rate_target(input.target_pitch_rad, input.measured_attitude_rad.y, 1),
             input.target_yaw_rate_rad_s.clamp(
                 -self.config.rate_limits_rad_s.z,
                 self.config.rate_limits_rad_s.z,

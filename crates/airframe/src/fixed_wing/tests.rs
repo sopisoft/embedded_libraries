@@ -1,8 +1,8 @@
 #[cfg(feature = "cascade-pid")]
 mod cascade {
+    use crate::{Attitude, Vector3};
     use control::{ConventionalTailMixer, ElevonMixer, PidController, VTailMixer};
     use fugit::MicrosDurationU32;
-    use math::{EulerAngles, Vec3};
     use pwm::{ServoRange, ServoSet};
     use stabilization::{AxisErrorMode, CascadeAttitudeController, CascadeAxis};
 
@@ -85,8 +85,8 @@ mod cascade {
                 flaps: 0.0,
                 attitude_hold_enabled: true,
             },
-            EulerAngles::new(0.0, 0.0, 0.0),
-            Vec3::zero(),
+            Attitude::new(0.0, 0.0, 0.0),
+            Vector3::ZERO,
             MicrosDurationU32::from_millis(10),
         );
         assert!(output.surfaces.left_aileron.abs() > 0.0);
@@ -113,8 +113,8 @@ mod cascade {
                 flaps: 0.0,
                 attitude_hold_enabled: true,
             },
-            EulerAngles::new(0.0, 0.0, 0.0),
-            Vec3::zero(),
+            Attitude::new(0.0, 0.0, 0.0),
+            Vector3::ZERO,
             MicrosDurationU32::from_millis(10),
         );
         assert_ne!(output.surfaces.left_elevon, output.surfaces.right_elevon);
@@ -140,8 +140,8 @@ mod cascade {
                 flaps: 0.0,
                 attitude_hold_enabled: true,
             },
-            EulerAngles::new(0.0, 0.0, 0.0),
-            Vec3::zero(),
+            Attitude::new(0.0, 0.0, 0.0),
+            Vector3::ZERO,
             MicrosDurationU32::from_millis(10),
         );
         assert_ne!(output.surfaces.left_tail, output.surfaces.right_tail);
@@ -150,10 +150,10 @@ mod cascade {
 
 #[cfg(feature = "indi")]
 mod indi_backend {
+    use crate::{Attitude, Vector3};
     use control::ConventionalTailMixer;
     use fugit::MicrosDurationU32;
     use indi::{IndiAttitudeConfig, IndiAttitudeController, IndiAxisConfig, IndiRateController};
-    use math::{EulerAngles, Vec3};
     use pwm::{ServoRange, ServoSet};
 
     use super::super::{AttitudeHoldLimits, FixedWingController, ServoMap};
@@ -189,8 +189,8 @@ mod indi_backend {
                 flaps: 0.0,
                 attitude_hold_enabled: true,
             },
-            EulerAngles::new(0.0, 0.0, 0.0),
-            Vec3::zero(),
+            Attitude::new(0.0, 0.0, 0.0),
+            Vector3::ZERO,
             MicrosDurationU32::from_millis(20),
         );
         assert!(output.surfaces.left_aileron.abs() > 0.0);

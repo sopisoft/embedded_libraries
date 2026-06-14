@@ -11,3 +11,5 @@ extern crate std;
 pub mod cascade;
 
 pub use cascade::{AxisErrorMode, CascadeAttitudeController, CascadeAxis, CascadeOutputs};
+pub type Attitude = glam::Vec3;
+pub type Vector3 = glam::Vec3;

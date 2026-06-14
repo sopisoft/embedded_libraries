@@ -18,7 +18,6 @@
 mod embedded_example {
     use core::fmt::Write;
 
-    use embedded_hal::delay::DelayNs;
     use mcp3208::{Channel, Mcp3208};
     use panic_halt as _;
     use rp235x_hal as hal;
@@ -32,6 +31,12 @@ mod embedded_example {
     pub static IMAGE_DEF: hal::block::ImageDef = hal::block::ImageDef::secure_exe();
 
     const XTAL_FREQ_HZ: u32 = 12_000_000;
+
+    fn wait_until(timer: &hal::Timer<hal::timer::CopyableTimer0>, deadline: hal::timer::Instant) {
+        while timer.get_counter() < deadline {
+            core::hint::spin_loop();
+        }
+    }
 
     #[hal::entry]
     fn main() -> ! {
@@ -49,7 +54,7 @@ mod embedded_example {
         )
         .unwrap();
 
-        let mut timer = hal::Timer::new_timer0(pac.TIMER0, &mut pac.RESETS, &clocks);
+        let timer = hal::Timer::new_timer0(pac.TIMER0, &mut pac.RESETS, &clocks);
         let sio = hal::Sio::new(pac.SIO);
         let pins = hal::gpio::Pins::new(
             pac.IO_BANK0,
@@ -80,6 +85,8 @@ mod embedded_example {
         let mut adc = Mcp3208::new(spi, cs);
 
         writeln!(uart, "\r\nMCP3208 on RP2350 example\r").ok();
+        let period = hal::fugit::MicrosDurationU32::from_ticks(500_000);
+        let mut next_tick = timer.get_counter() + period;
 
         loop {
             let raw = adc.read_raw(Channel::SingleEnded(0)).unwrap_or(0);
@@ -87,7 +94,8 @@ mod embedded_example {
                 .read_voltage_mv(Channel::SingleEnded(0), 3300)
                 .unwrap_or(0);
             writeln!(uart, "CH0 raw={raw:4}  voltage={mv:4} mV\r").ok();
-            timer.delay_ms(500);
+            wait_until(&timer, next_tick);
+            next_tick += period;
         }
     }
 }

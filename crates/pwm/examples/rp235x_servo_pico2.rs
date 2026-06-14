@@ -8,7 +8,6 @@
 
 #[cfg(all(target_arch = "arm", target_os = "none"))]
 mod embedded_example {
-    use embedded_hal::delay::DelayNs;
     use panic_halt as _;
     use pwm::Servo;
     use rp235x_hal as hal;
@@ -19,6 +18,12 @@ mod embedded_example {
     pub static IMAGE_DEF: hal::block::ImageDef = hal::block::ImageDef::secure_exe();
 
     const XTAL_FREQ_HZ: u32 = 12_000_000;
+
+    fn wait_until(timer: &hal::Timer<hal::timer::CopyableTimer0>, deadline: hal::timer::Instant) {
+        while timer.get_counter() < deadline {
+            core::hint::spin_loop();
+        }
+    }
 
     #[hal::entry]
     fn main() -> ! {
@@ -49,7 +54,7 @@ mod embedded_example {
             &mut pac.RESETS,
         );
 
-        let mut delay = hal::Timer::new_timer0(pac.TIMER0, &mut pac.RESETS, &clocks);
+        let timer = hal::Timer::new_timer0(pac.TIMER0, &mut pac.RESETS, &clocks);
 
         // We use PWM slice 0 channel A and route it to GPIO0.
         // GPIO0 is normally easier to access on a Pico-style board than GPIO24/25.
@@ -74,17 +79,22 @@ mod embedded_example {
             -90.0,
             90.0,
         );
+        let period = hal::fugit::MicrosDurationU32::from_ticks(800_000);
+        let mut next_tick = timer.get_counter() + period;
 
         loop {
             // Sweep the servo slowly so it is easy to observe with a hobby servo.
             servo.set_angle_degrees(-45.0).unwrap();
-            delay.delay_ms(800);
+            wait_until(&timer, next_tick);
+            next_tick += period;
 
             servo.set_angle_degrees(0.0).unwrap();
-            delay.delay_ms(800);
+            wait_until(&timer, next_tick);
+            next_tick += period;
 
             servo.set_angle_degrees(45.0).unwrap();
-            delay.delay_ms(800);
+            wait_until(&timer, next_tick);
+            next_tick += period;
         }
     }
 }

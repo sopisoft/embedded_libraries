@@ -17,3 +17,5 @@ pub use fixed_wing::{
 pub use input::{
     AxisConfig, PilotCommand, RcChannelMap, RcInputConfig, SwitchConfig, apply_subset_channels,
 };
+pub type Attitude = glam::Vec3;
+pub type Vector3 = glam::Vec3;

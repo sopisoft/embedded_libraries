@@ -17,7 +17,6 @@
 mod embedded_example {
     use core::convert::Infallible;
 
-    use embedded_hal::delay::DelayNs;
     use panic_halt as _;
     use pwm::{Servo, ServoBank, ServoOutput, ServoRange, ServoSet};
     use rp235x_hal as hal;
@@ -27,6 +26,12 @@ mod embedded_example {
     pub static IMAGE_DEF: hal::block::ImageDef = hal::block::ImageDef::secure_exe();
 
     const XTAL_FREQ_HZ: u32 = 12_000_000;
+
+    fn wait_until(timer: &hal::Timer<hal::timer::CopyableTimer0>, deadline: hal::timer::Instant) {
+        while timer.get_counter() < deadline {
+            core::hint::spin_loop();
+        }
+    }
 
     #[hal::entry]
     fn main() -> ! {
@@ -51,7 +56,7 @@ mod embedded_example {
             sio.gpio_bank0,
             &mut pac.RESETS,
         );
-        let mut delay = hal::Timer::new_timer0(pac.TIMER0, &mut pac.RESETS, &clocks);
+        let timer = hal::Timer::new_timer0(pac.TIMER0, &mut pac.RESETS, &clocks);
 
         let pwm_slices = hal::pwm::Slices::new(pac.PWM, &mut pac.RESETS);
 
@@ -90,6 +95,8 @@ mod embedded_example {
         let mut right_aileron = Servo::from_range(right_aileron_pwm, ranges.range(1));
         let mut elevator = Servo::from_range(elevator_pwm, ranges.range(2));
         let mut rudder = Servo::from_range(rudder_pwm, ranges.range(3));
+        let period = hal::fugit::MicrosDurationU32::from_ticks(1_000_000);
+        let mut next_tick = timer.get_counter() + period;
 
         loop {
             // Neutral surface positions.
@@ -103,7 +110,8 @@ mod embedded_example {
                 ]);
                 bank.set_pulse_widths(pulses).unwrap();
             }
-            delay.delay_ms(1000);
+            wait_until(&timer, next_tick);
+            next_tick += period;
 
             // Coordinated right turn:
             // ailerons split, elevator slightly up, rudder to the right.
@@ -117,7 +125,8 @@ mod embedded_example {
                 ]);
                 bank.set_pulse_widths(pulses).unwrap();
             }
-            delay.delay_ms(1000);
+            wait_until(&timer, next_tick);
+            next_tick += period;
 
             // Coordinated left turn.
             {
@@ -130,7 +139,8 @@ mod embedded_example {
                 ]);
                 bank.set_pulse_widths(pulses).unwrap();
             }
-            delay.delay_ms(1000);
+            wait_until(&timer, next_tick);
+            next_tick += period;
         }
     }
 }

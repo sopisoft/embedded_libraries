@@ -16,8 +16,8 @@ name = "ahrs"
 version = "0.1.0"
 dependencies = [
  "fugit 0.4.0",
+ "glam 0.33.1",
  "libm",
- "math",
 ]
 
 [[package]]
@@ -28,16 +28,25 @@ dependencies = [
  "elrs",
  "embedded-hal 1.0.0",
  "fugit 0.4.0",
+ "glam 0.33.1",
  "imu",
  "indi",
  "linked_list_allocator",
  "lis3mdl",
  "lsm6ds3tr",
- "math",
  "panic-halt",
  "pwm",
  "rp235x-hal",
  "stabilization",
+]
+
+[[package]]
+name = "approx"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cab112f0a86d568ea0e627cc1d6be74a1e9cd55214684db5561995f6dad897c6"
+dependencies = [
+ "num-traits",
 ]
 
 [[package]]
@@ -54,6 +63,12 @@ checksum = "ef1e3e699d84ab1b0911a1010c5c106aa34ae89aeac103be5ce0c3859db1e891"
 dependencies = [
  "term",
 ]
+
+[[package]]
+name = "autocfg"
+version = "1.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 
 [[package]]
 name = "bare-metal"
@@ -290,7 +305,8 @@ name = "eskf"
 version = "0.1.0"
 dependencies = [
  "fugit 0.4.0",
- "math",
+ "glam 0.33.1",
+ "nalgebra",
 ]
 
 [[package]]
@@ -373,6 +389,42 @@ dependencies = [
 ]
 
 [[package]]
+name = "glam"
+version = "0.30.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "19fc433e8437a212d1b6f1e68c7824af3aed907da60afa994e7f542d18d12aa9"
+dependencies = [
+ "libm",
+]
+
+[[package]]
+name = "glam"
+version = "0.31.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "556f6b2ea90b8d15a74e0e7bb41671c9bdf38cd9f78c284d750b9ce58a2b5be7"
+dependencies = [
+ "libm",
+]
+
+[[package]]
+name = "glam"
+version = "0.32.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f70749695b063ecbf6b62949ccccde2e733ec3ecbbd71d467dca4e5c6c97cca0"
+dependencies = [
+ "libm",
+]
+
+[[package]]
+name = "glam"
+version = "0.33.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "898f5a568a84989b6c0f8caa50a93074b97dbdc58fc6d9543157bb4562758933"
+dependencies = [
+ "libm",
+]
+
+[[package]]
 name = "hash32"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -413,12 +465,12 @@ version = "0.1.0"
 dependencies = [
  "embedded-hal 1.0.0",
  "fugit 0.4.0",
+ "glam 0.33.1",
  "libm",
  "linked_list_allocator",
  "lis3mdl",
  "lsm6ds3tr",
  "madgwick",
- "math",
  "navigation",
  "panic-halt",
  "rp235x-hal",
@@ -439,7 +491,8 @@ name = "indi"
 version = "0.1.0"
 dependencies = [
  "fugit 0.4.0",
- "math",
+ "glam 0.33.1",
+ "nalgebra",
 ]
 
 [[package]]
@@ -474,8 +527,8 @@ name = "kinematics"
 version = "0.1.0"
 dependencies = [
  "fugit 0.4.0",
+ "glam 0.33.1",
  "libm",
- "math",
 ]
 
 [[package]]
@@ -577,14 +630,7 @@ name = "madgwick"
 version = "0.1.0"
 dependencies = [
  "fugit 0.4.0",
- "libm",
- "math",
-]
-
-[[package]]
-name = "math"
-version = "0.1.0"
-dependencies = [
+ "glam 0.33.1",
  "libm",
 ]
 
@@ -611,14 +657,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "nalgebra"
+version = "0.35.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "adc43a60c217b0c6ff46e47f26911015ad8d2e5a8be1af668c67e370d99a4346"
+dependencies = [
+ "approx",
+ "glam 0.30.10",
+ "glam 0.31.1",
+ "glam 0.32.1",
+ "glam 0.33.1",
+ "num-complex",
+ "num-rational",
+ "num-traits",
+ "simba",
+ "typenum",
+]
+
+[[package]]
 name = "navigation"
 version = "0.1.0"
 dependencies = [
  "embedded-hal 1.0.0",
  "fugit 0.4.0",
+ "glam 0.33.1",
  "kinematics",
  "libm",
- "math",
 ]
 
 [[package]]
@@ -641,6 +705,44 @@ name = "new_debug_unreachable"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "650eef8c711430f1a879fdd01d4745a7deea475becfb90269c06775983bbf086"
+
+[[package]]
+name = "num-complex"
+version = "0.4.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73f88a1307638156682bada9d7604135552957b7818057dcef22705b4d509495"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
+name = "num-integer"
+version = "0.1.46"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7969661fd2958a5cb096e56c8e1ad0444ac2bbcd0061bd28660485a44879858f"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
+name = "num-rational"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f83d14da390562dca69fc84082e73e548e1ad308d24accdedd2720017cb37824"
+dependencies = [
+ "num-integer",
+ "num-traits",
+]
+
+[[package]]
+name = "num-traits"
+version = "0.2.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
+dependencies = [
+ "autocfg",
+ "libm",
+]
 
 [[package]]
 name = "num_enum"
@@ -1046,6 +1148,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "simba"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f45c644a9f3a386f9288625d9f0c1e999e1acf07a37df35d0516c7f199d9cb2"
+dependencies = [
+ "approx",
+ "num-complex",
+ "num-traits",
+]
+
+[[package]]
 name = "siphasher"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1072,7 +1185,7 @@ version = "0.1.0"
 dependencies = [
  "control",
  "fugit 0.4.0",
- "math",
+ "glam 0.33.1",
 ]
 
 [[package]]

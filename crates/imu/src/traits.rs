@@ -1,7 +1,6 @@
 //! Sensor traits that keep estimation code independent from hardware drivers.
 
-use math::Vec3;
-
+use crate::Vector3;
 use crate::sample::{AccelGyroSample, MargSample};
 
 /// Source for one accelerometer + gyroscope sample.
@@ -15,7 +14,7 @@ pub trait AccelGyroSource {
 pub trait MagnetometerSource {
     type Error;
 
-    fn read_magnetometer(&mut self) -> Result<Vec3, Self::Error>;
+    fn read_magnetometer(&mut self) -> Result<Vector3, Self::Error>;
 }
 
 /// Source for one full MARG sample.
@@ -87,7 +86,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use math::Vec3;
+    use crate::Vector3;
 
     #[derive(Copy, Clone)]
     struct MockImu;
@@ -97,8 +96,8 @@ mod tests {
 
         fn read_accel_gyro(&mut self) -> Result<AccelGyroSample, Self::Error> {
             Ok(AccelGyroSample::without_temperature(
-                Vec3::new(0.0, 0.0, 9.80665),
-                Vec3::zero(),
+                Vector3::new(0.0, 0.0, 9.80665),
+                Vector3::ZERO,
             ))
         }
     }
@@ -109,8 +108,8 @@ mod tests {
     impl MagnetometerSource for MockMag {
         type Error = ();
 
-        fn read_magnetometer(&mut self) -> Result<Vec3, Self::Error> {
-            Ok(Vec3::unit_x())
+        fn read_magnetometer(&mut self) -> Result<Vector3, Self::Error> {
+            Ok(Vector3::X)
         }
     }
 
@@ -118,7 +117,7 @@ mod tests {
     fn combined_source_reads_both_sensors() {
         let mut source = CombinedMargSource::new(MockImu, MockMag);
         let sample = source.read_marg().unwrap();
-        assert_eq!(sample.accel_gyro.gyro_rad_s, Vec3::zero());
-        assert_eq!(sample.mag_body, Vec3::unit_x());
+        assert_eq!(sample.accel_gyro.gyro_rad_s, Vector3::ZERO);
+        assert_eq!(sample.mag_body, Vector3::X);
     }
 }

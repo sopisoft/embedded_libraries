@@ -1,7 +1,18 @@
 use fugit::MicrosDurationU32;
-use math::{EulerAngles, Matrix, Quat, Vec3, wrap_pi};
+use glam::{EulerRot, Quat, Vec3};
 
-use super::Eskf;
+use super::{Eskf, Matrix, Vector};
+
+fn wrap_pi(angle_rad: f32) -> f32 {
+    let mut wrapped = angle_rad;
+    while wrapped > core::f32::consts::PI {
+        wrapped -= core::f32::consts::TAU;
+    }
+    while wrapped < -core::f32::consts::PI {
+        wrapped += core::f32::consts::TAU;
+    }
+    wrapped
+}
 
 impl Eskf {
     /// Runs the prediction step with IMU measurements.
@@ -16,8 +27,8 @@ impl Eskf {
         let omega = gyro_meas - self.gyro_bias;
         let accel_body = accel_meas - self.accel_bias;
 
-        self.orientation = self.orientation.integrate_gyro(omega, dt);
-        let accel_world = self.orientation.rotate_vec3(accel_body) + self.gravity;
+        self.orientation = (self.orientation * Quat::from_scaled_axis(omega * dt)).normalize();
+        let accel_world = self.orientation.mul_vec3(accel_body) + self.gravity;
 
         self.position += self.velocity * dt + accel_world * (0.5 * dt * dt);
         self.velocity += accel_world * dt;
@@ -53,7 +64,8 @@ impl Eskf {
     /// Corrects altitude only.
     pub fn correct_altitude(&mut self, altitude_m: f32, noise: f32) {
         let residual = Vec3::new(0.0, 0.0, altitude_m - self.position.z);
-        let h = Matrix::<3, 15>::from_fn(|r, c| if r == 2 && c == 2 { 1.0 } else { 0.0 });
+        let mut h = Matrix::<3, 15>::zeros();
+        h[(2, 2)] = 1.0;
         self.correct_with_matrix(residual, h, noise, |state, delta| {
             state.position.z += delta[2];
         });
@@ -61,16 +73,19 @@ impl Eskf {
 
     /// Corrects the forward speed along the body X axis.
     pub fn correct_forward_speed(&mut self, speed_m_s: f32, noise: f32) {
-        let body_velocity = self.orientation.rotate_inverse_vec3(self.velocity);
+        let body_velocity = self.orientation.conjugate().mul_vec3(self.velocity);
         let residual = Vec3::new(speed_m_s - body_velocity.x, 0.0, 0.0);
         let rotation = Self::rotation_matrix(self.orientation).transpose();
-        let h = Matrix::<3, 15>::from_fn(|r, c| {
-            if (3..6).contains(&c) {
-                rotation.data[r][c - 3]
-            } else {
-                0.0
+        let mut h = Matrix::<3, 15>::zeros();
+        let mut row = 0usize;
+        while row < 3 {
+            let mut col = 0usize;
+            while col < 3 {
+                h[(row, 3 + col)] = rotation[(row, col)];
+                col += 1;
             }
-        });
+            row += 1;
+        }
         self.correct_with_matrix(residual, h, noise, |state, delta| {
             state.velocity += Vec3::new(delta[3], delta[4], delta[5]);
         });
@@ -78,20 +93,20 @@ impl Eskf {
 
     /// Corrects yaw while leaving roll and pitch untouched.
     pub fn correct_heading(&mut self, yaw_rad: f32, noise_rad: f32) {
-        let current = self.orientation.to_euler();
-        let yaw_error = wrap_pi(yaw_rad - current.yaw);
+        let (current_roll, current_pitch, current_yaw) = self.orientation.to_euler(EulerRot::XYZ);
+        let yaw_error = wrap_pi(yaw_rad - current_yaw);
         self.correct_with_matrix(
             Vec3::new(0.0, 0.0, yaw_error),
             Self::h_orientation(),
             noise_rad,
             |state, delta| {
-                let corrected = state.orientation
-                    * Quat::from_small_angle(Vec3::new(delta[6], delta[7], delta[8]));
-                let mut euler = corrected.to_euler();
-                euler.roll = current.roll;
-                euler.pitch = current.pitch;
+                let corrected = (state.orientation
+                    * Quat::from_scaled_axis(Vec3::new(delta[6], delta[7], delta[8])))
+                .normalize();
+                let (_, _, corrected_yaw) = corrected.to_euler(EulerRot::XYZ);
                 state.orientation =
-                    Quat::from_euler(EulerAngles::new(euler.roll, euler.pitch, euler.yaw));
+                    Quat::from_euler(EulerRot::XYZ, current_roll, current_pitch, corrected_yaw)
+                        .normalize();
             },
         );
     }
@@ -111,8 +126,8 @@ impl Eskf {
             noise_rad,
             |state, delta| {
                 state.orientation = (state.orientation
-                    * Quat::from_small_angle(Vec3::new(delta[6], delta[7], delta[8])))
-                .normalized();
+                    * Quat::from_scaled_axis(Vec3::new(delta[6], delta[7], delta[8])))
+                .normalize();
             },
         );
     }
@@ -124,17 +139,17 @@ impl Eskf {
         noise: f32,
         apply_delta: F,
     ) where
-        F: FnOnce(&mut Self, [f32; 15]),
+        F: FnOnce(&mut Self, &Vector<15>),
     {
-        let r = Matrix::<3, 3>::from_diagonal([noise * noise; 3]);
+        let r = Matrix::<3, 3>::identity() * (noise * noise);
         let s = (h * self.covariance * h.transpose()) + r;
-        let Some(s_inv) = s.inverse() else {
+        let Some(s_inv) = s.try_inverse() else {
             return;
         };
 
         let k = self.covariance * h.transpose() * s_inv;
-        let delta = k * [residual.x, residual.y, residual.z];
-        apply_delta(self, delta);
+        let delta = k * Vector::<3>::new(residual.x, residual.y, residual.z);
+        apply_delta(self, &delta);
 
         let i = Matrix::<15, 15>::identity();
         let kh = k * h;
@@ -143,14 +158,32 @@ impl Eskf {
     }
 
     fn h_position() -> Matrix<3, 15> {
-        Matrix::from_fn(|r, c| if r == c { 1.0 } else { 0.0 })
+        let mut h = Matrix::<3, 15>::zeros();
+        let mut axis = 0usize;
+        while axis < 3 {
+            h[(axis, axis)] = 1.0;
+            axis += 1;
+        }
+        h
     }
 
     fn h_velocity() -> Matrix<3, 15> {
-        Matrix::from_fn(|r, c| if c == 3 + r { 1.0 } else { 0.0 })
+        let mut h = Matrix::<3, 15>::zeros();
+        let mut axis = 0usize;
+        while axis < 3 {
+            h[(axis, 3 + axis)] = 1.0;
+            axis += 1;
+        }
+        h
     }
 
     fn h_orientation() -> Matrix<3, 15> {
-        Matrix::from_fn(|r, c| if c == 6 + r { 1.0 } else { 0.0 })
+        let mut h = Matrix::<3, 15>::zeros();
+        let mut axis = 0usize;
+        while axis < 3 {
+            h[(axis, 6 + axis)] = 1.0;
+            axis += 1;
+        }
+        h
     }
 }

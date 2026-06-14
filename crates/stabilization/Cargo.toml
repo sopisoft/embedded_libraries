@@ -7,4 +7,4 @@ license.workspace = true
 [dependencies]
 control = { path = "../control" }
 fugit = { workspace = true }
-math = { path = "../math" }
+glam = { workspace = true }

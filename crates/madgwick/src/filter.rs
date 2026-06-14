@@ -1,8 +1,8 @@
 //! Madgwick attitude estimator for IMU and MARG data.
 
 use fugit::MicrosDurationU32;
+use glam::{Quat, Vec3};
 use libm::sqrtf;
-use math::{Quat, Vec3};
 
 /// Madgwick AHRS filter.
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -15,7 +15,7 @@ impl Madgwick {
     /// Creates a filter with the given gradient-descent gain.
     pub const fn new(beta: f32) -> Self {
         Self {
-            orientation: Quat::identity(),
+            orientation: Quat::IDENTITY,
             beta,
         }
     }
@@ -27,7 +27,7 @@ impl Madgwick {
 
     /// Sets the orientation directly.
     pub fn set_orientation(&mut self, orientation: Quat) {
-        self.orientation = orientation.normalized();
+        self.orientation = orientation.normalize();
     }
 
     /// Updates the filter gain.
@@ -48,7 +48,7 @@ impl Madgwick {
         let mut q_dot3 = 0.5 * (q0 * gyro_rad_s.y - q1 * gyro_rad_s.z + q3 * gyro_rad_s.x);
         let mut q_dot4 = 0.5 * (q0 * gyro_rad_s.z + q1 * gyro_rad_s.y - q2 * gyro_rad_s.x);
 
-        if accel != Vec3::zero() {
+        if accel != Vec3::ZERO {
             let recip_norm = inv_sqrt(accel.x * accel.x + accel.y * accel.y + accel.z * accel.z);
             let ax = accel.x * recip_norm;
             let ay = accel.y * recip_norm;
@@ -97,17 +97,17 @@ impl Madgwick {
         q3 += q_dot4 * dt;
 
         let recip_norm = inv_sqrt(q0 * q0 + q1 * q1 + q2 * q2 + q3 * q3);
-        self.orientation = Quat::new(
-            q0 * recip_norm,
+        self.orientation = Quat::from_xyzw(
             q1 * recip_norm,
             q2 * recip_norm,
             q3 * recip_norm,
+            q0 * recip_norm,
         );
     }
 
     /// Updates the filter from gyroscope, accelerometer, and magnetometer data.
     pub fn update_marg(&mut self, gyro_rad_s: Vec3, accel: Vec3, mag: Vec3, dt: MicrosDurationU32) {
-        if mag == Vec3::zero() {
+        if mag == Vec3::ZERO {
             self.update_imu(gyro_rad_s, accel, dt);
             return;
         }
@@ -123,7 +123,7 @@ impl Madgwick {
         let mut q_dot3 = 0.5 * (q0 * gyro_rad_s.y - q1 * gyro_rad_s.z + q3 * gyro_rad_s.x);
         let mut q_dot4 = 0.5 * (q0 * gyro_rad_s.z + q1 * gyro_rad_s.y - q2 * gyro_rad_s.x);
 
-        if accel != Vec3::zero() {
+        if accel != Vec3::ZERO {
             let recip_norm = inv_sqrt(accel.x * accel.x + accel.y * accel.y + accel.z * accel.z);
             let ax = accel.x * recip_norm;
             let ay = accel.y * recip_norm;
@@ -213,11 +213,11 @@ impl Madgwick {
         q3 += q_dot4 * dt;
 
         let recip_norm = inv_sqrt(q0 * q0 + q1 * q1 + q2 * q2 + q3 * q3);
-        self.orientation = Quat::new(
-            q0 * recip_norm,
+        self.orientation = Quat::from_xyzw(
             q1 * recip_norm,
             q2 * recip_norm,
             q3 * recip_norm,
+            q0 * recip_norm,
         );
     }
 }
@@ -236,7 +236,7 @@ mod tests {
     fn stationary_update_keeps_identity() {
         let mut filter = Madgwick::new(0.1);
         filter.update_imu(
-            Vec3::zero(),
+            Vec3::ZERO,
             Vec3::new(0.0, 0.0, 1.0),
             MicrosDurationU32::from_millis(10),
         );

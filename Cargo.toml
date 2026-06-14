@@ -12,7 +12,6 @@ members = [
   "crates/lis3mdl",
   "crates/lps25hb",
   "crates/madgwick",
-  "crates/math",
   "crates/mcp3208",
   "crates/mis2500",
   "crates/navigation",
@@ -33,3 +32,9 @@ embedded-io = "0.7"
 fugit = "0.4"
 heapless = "0.9"
 libm = "0.2"
+nalgebra = { version = "0.35.0", default-features = false, features = ["libm"] }
+
+[workspace.dependencies.glam]
+version = "0.33"
+default-features = false
+features = ["libm", "scalar-math"]

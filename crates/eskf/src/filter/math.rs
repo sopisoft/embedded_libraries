@@ -1,6 +1,6 @@
-use math::{Matrix, Quat, Vec3};
+use glam::{Mat3, Quat, Vec3};
 
-use super::Eskf;
+use super::{Eskf, Matrix};
 
 impl Eskf {
     pub(crate) fn system_matrix(orientation: Quat, accel_body: Vec3, dt: f32) -> Matrix<15, 15> {
@@ -20,18 +20,18 @@ impl Eskf {
                 let col_att = 6 + j;
                 let col_ba = 9 + j;
                 let col_bg = 12 + j;
-                let rskew = r.data[i][0] * a_skew.data[0][j]
-                    + r.data[i][1] * a_skew.data[1][j]
-                    + r.data[i][2] * a_skew.data[2][j];
+                let rskew = r[(i, 0)] * a_skew[(0, j)]
+                    + r[(i, 1)] * a_skew[(1, j)]
+                    + r[(i, 2)] * a_skew[(2, j)];
 
                 if i == j {
-                    f.data[row_pos][col_vel] = dt;
-                    f.data[row_att][col_bg] = -dt;
+                    f[(row_pos, col_vel)] = dt;
+                    f[(row_att, col_bg)] = -dt;
                 }
-                f.data[row_pos][col_att] = -0.5 * dt2 * rskew;
-                f.data[row_pos][col_ba] = -0.5 * dt2 * r.data[i][j];
-                f.data[row_vel][col_att] = -dt * rskew;
-                f.data[row_vel][col_ba] = -dt * r.data[i][j];
+                f[(row_pos, col_att)] = -0.5 * dt2 * rskew;
+                f[(row_pos, col_ba)] = -0.5 * dt2 * r[(i, j)];
+                f[(row_vel, col_att)] = -dt * rskew;
+                f[(row_vel, col_ba)] = -dt * r[(i, j)];
                 j += 1;
             }
             i += 1;
@@ -58,37 +58,33 @@ impl Eskf {
 
         let mut i = 0usize;
         while i < 3 {
-            q.data[i][i] = pos_var;
-            q.data[3 + i][3 + i] = vel_var;
-            q.data[6 + i][6 + i] = att_var;
-            q.data[9 + i][9 + i] = ba_var;
-            q.data[12 + i][12 + i] = bg_var;
+            q[(i, i)] = pos_var;
+            q[(3 + i, 3 + i)] = vel_var;
+            q[(6 + i, 6 + i)] = att_var;
+            q[(9 + i, 9 + i)] = ba_var;
+            q[(12 + i, 12 + i)] = bg_var;
             i += 1;
         }
         q
     }
 
     pub(crate) fn rotation_matrix(q: Quat) -> Matrix<3, 3> {
-        let q = q.normalized();
-        let xx = q.x * q.x;
-        let yy = q.y * q.y;
-        let zz = q.z * q.z;
-        let xy = q.x * q.y;
-        let xz = q.x * q.z;
-        let yz = q.y * q.z;
-        let wx = q.w * q.x;
-        let wy = q.w * q.y;
-        let wz = q.w * q.z;
-
-        Matrix::new([
-            [1.0 - 2.0 * (yy + zz), 2.0 * (xy - wz), 2.0 * (xz + wy)],
-            [2.0 * (xy + wz), 1.0 - 2.0 * (xx + zz), 2.0 * (yz - wx)],
-            [2.0 * (xz - wy), 2.0 * (yz + wx), 1.0 - 2.0 * (xx + yy)],
+        let rotation = Mat3::from_quat(q.normalize());
+        Matrix::from_row_slice(&[
+            rotation.x_axis.x,
+            rotation.y_axis.x,
+            rotation.z_axis.x,
+            rotation.x_axis.y,
+            rotation.y_axis.y,
+            rotation.z_axis.y,
+            rotation.x_axis.z,
+            rotation.y_axis.z,
+            rotation.z_axis.z,
         ])
     }
 
     pub(crate) fn skew(v: Vec3) -> Matrix<3, 3> {
-        Matrix::new([[0.0, -v.z, v.y], [v.z, 0.0, -v.x], [-v.y, v.x, 0.0]])
+        Matrix::from_row_slice(&[0.0, -v.z, v.y, v.z, 0.0, -v.x, -v.y, v.x, 0.0])
     }
 
     pub(crate) fn symmetrize(&self, p: Matrix<15, 15>) -> Matrix<15, 15> {

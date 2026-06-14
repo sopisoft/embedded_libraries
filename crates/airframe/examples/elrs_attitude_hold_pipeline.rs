@@ -2,7 +2,6 @@ use airframe::{AttitudeHoldLimits, FixedWingController, RcInputConfig, ServoMap}
 use control::{ConventionalTailMixer, PidController};
 use elrs::RcChannels;
 use fugit::MicrosDurationU32;
-use math::{EulerAngles, Vec3};
 use pwm::{ServoRange, ServoSet};
 use stabilization::{AxisErrorMode, CascadeAttitudeController, CascadeAxis};
 
@@ -77,8 +76,12 @@ fn main() {
     );
 
     // These come from your estimator, not from the receiver.
-    let measured_attitude = EulerAngles::from_degrees(10.0, 2.0, 30.0);
-    let measured_rates = Vec3::new(0.15, -0.05, 0.04);
+    let measured_attitude = airframe::Attitude::new(
+        10.0f32.to_radians(),
+        2.0f32.to_radians(),
+        30.0f32.to_radians(),
+    );
+    let measured_rates = airframe::Vector3::new(0.15, -0.05, 0.04);
 
     let output = controller.update_selected(
         pilot,

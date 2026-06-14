@@ -1,6 +1,11 @@
 use fugit::MicrosDurationU32;
-use math::{EulerAngles, Vec2, Vec3};
+use glam::{EulerRot, Quat, Vec2, Vec3};
 use navigation::FixedWingNavigator;
+
+fn euler_deg(q: Quat) -> Vec3 {
+    let (roll, pitch, yaw) = q.to_euler(EulerRot::XYZ);
+    Vec3::new(roll.to_degrees(), pitch.to_degrees(), yaw.to_degrees())
+}
 
 fn main() {
     // This example demonstrates a very common fixed-wing navigation pattern:
@@ -11,7 +16,11 @@ fn main() {
     // The same pattern works for RC aircraft, small UAVs, and log replay tools.
 
     let mut navigator = FixedWingNavigator::new();
-    navigator.set_attitude(EulerAngles::from_degrees(2.0, 5.0, 45.0));
+    navigator.set_attitude(Vec3::new(
+        2.0f32.to_radians(),
+        5.0f32.to_radians(),
+        45.0f32.to_radians(),
+    ));
 
     // High-rate propagation inputs.
     let dt = MicrosDurationU32::from_millis(20);
@@ -49,8 +58,8 @@ fn main() {
     );
     println!(
         "Estimated Euler attitude: roll={:.1} deg, pitch={:.1} deg, yaw={:.1} deg",
-        state.pose.orientation.to_euler().to_degrees().roll,
-        state.pose.orientation.to_euler().to_degrees().pitch,
-        state.pose.orientation.to_euler().to_degrees().yaw
+        euler_deg(state.pose.orientation).x,
+        euler_deg(state.pose.orientation).y,
+        euler_deg(state.pose.orientation).z
     );
 }

@@ -1,6 +1,11 @@
 use fugit::MicrosDurationU32;
-use math::{EulerAngles, Quat, Vec3};
+use glam::{EulerRot, Quat, Vec3};
 use navigation::InertialNavigator;
+
+fn euler_deg(q: Quat) -> Vec3 {
+    let (roll, pitch, yaw) = q.to_euler(EulerRot::XYZ);
+    Vec3::new(roll.to_degrees(), pitch.to_degrees(), yaw.to_degrees())
+}
 
 fn main() {
     // This is the smallest useful navigation workflow in the workspace.
@@ -36,20 +41,25 @@ fn main() {
     nav.correct_heading(0.8, 0.2);
     nav.correct_forward_speed(15.0, 0.6);
 
-    let euler_deg = nav.pose.orientation.to_euler().to_degrees();
+    let attitude_deg = euler_deg(nav.pose.orientation);
     println!(
         "Corrected position: ({:.2}, {:.2}, {:.2}) m",
         nav.pose.position.x, nav.pose.position.y, nav.pose.position.z
     );
     println!(
         "Corrected attitude: roll={:.2} deg, pitch={:.2} deg, yaw={:.2} deg",
-        euler_deg.roll, euler_deg.pitch, euler_deg.yaw
+        attitude_deg.x, attitude_deg.y, attitude_deg.z
     );
 
     // You can also replace the orientation directly if a higher-level estimator owns it.
-    nav.pose.orientation = Quat::from_euler(EulerAngles::from_degrees(1.0, -2.0, 45.0));
+    nav.pose.orientation = Quat::from_euler(
+        EulerRot::XYZ,
+        1.0f32.to_radians(),
+        (-2.0f32).to_radians(),
+        45.0f32.to_radians(),
+    );
     println!(
         "Manually set yaw for downstream logic: {:.2} deg",
-        nav.pose.orientation.to_euler().to_degrees().yaw
+        euler_deg(nav.pose.orientation).z
     );
 }

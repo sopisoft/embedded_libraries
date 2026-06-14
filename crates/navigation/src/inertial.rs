@@ -1,7 +1,19 @@
 //! General-purpose inertial navigation with lightweight measurement correction.
 
 use fugit::MicrosDurationU32;
-use math::{EulerAngles, Pose3, Quat, Vec3, wrap_pi};
+use glam::{EulerRot, Quat, Vec3};
+use kinematics::Pose3;
+
+fn wrap_pi(angle_rad: f32) -> f32 {
+    let mut wrapped = angle_rad;
+    while wrapped > core::f32::consts::PI {
+        wrapped -= core::f32::consts::TAU;
+    }
+    while wrapped < -core::f32::consts::PI {
+        wrapped += core::f32::consts::TAU;
+    }
+    wrapped
+}
 
 /// A lightweight dead-reckoning navigator with complementary correction hooks.
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -19,7 +31,7 @@ impl InertialNavigator {
     pub const fn new() -> Self {
         Self {
             pose: Pose3::identity(),
-            velocity_world: Vec3::zero(),
+            velocity_world: Vec3::ZERO,
             gravity_world: Vec3::new(0.0, 0.0, -9.80665),
         }
     }
@@ -27,8 +39,9 @@ impl InertialNavigator {
     /// Integrates IMU data where accelerometer samples are specific force.
     pub fn predict_imu(&mut self, accel_body: Vec3, gyro_rad_s: Vec3, dt: MicrosDurationU32) {
         let dt = dt.as_secs_f32();
-        self.pose.orientation = self.pose.orientation.integrate_gyro(gyro_rad_s, dt);
-        let accel_world = self.pose.orientation.rotate_vec3(accel_body) + self.gravity_world;
+        self.pose.orientation =
+            (self.pose.orientation * Quat::from_scaled_axis(gyro_rad_s * dt)).normalize();
+        let accel_world = self.pose.orientation.mul_vec3(accel_body) + self.gravity_world;
         self.pose.position += self.velocity_world * dt + accel_world * (0.5 * dt * dt);
         self.velocity_world += accel_world * dt;
     }
@@ -41,7 +54,8 @@ impl InertialNavigator {
         dt: MicrosDurationU32,
     ) {
         let dt = dt.as_secs_f32();
-        self.pose.orientation = self.pose.orientation.integrate_gyro(gyro_rad_s, dt);
+        self.pose.orientation =
+            (self.pose.orientation * Quat::from_scaled_axis(gyro_rad_s * dt)).normalize();
         self.pose.position += velocity_world * dt;
         self.velocity_world = velocity_world;
     }
@@ -67,11 +81,9 @@ impl InertialNavigator {
     /// Corrects yaw without affecting roll or pitch.
     pub fn correct_heading(&mut self, yaw_rad: f32, gain: f32) {
         let gain = gain.clamp(0.0, 1.0);
-        let mut euler = self.pose.orientation.to_euler();
-        let yaw_error = wrap_pi(yaw_rad - euler.yaw);
-        euler.yaw = wrap_pi(euler.yaw + yaw_error * gain);
-        self.pose.orientation =
-            Quat::from_euler(EulerAngles::new(euler.roll, euler.pitch, euler.yaw));
+        let (roll, pitch, yaw) = self.pose.orientation.to_euler(EulerRot::XYZ);
+        let corrected_yaw = wrap_pi(yaw + wrap_pi(yaw_rad - yaw) * gain);
+        self.pose.orientation = Quat::from_euler(EulerRot::XYZ, roll, pitch, corrected_yaw);
     }
 
     /// Corrects the body-X speed component, useful for wheel odometry or airspeed.
@@ -80,13 +92,14 @@ impl InertialNavigator {
         let body_velocity = self
             .pose
             .orientation
-            .rotate_inverse_vec3(self.velocity_world);
+            .conjugate()
+            .mul_vec3(self.velocity_world);
         let corrected = Vec3::new(
             body_velocity.x + (forward_speed_m_s - body_velocity.x) * gain,
             body_velocity.y,
             body_velocity.z,
         );
-        self.velocity_world = self.pose.orientation.rotate_vec3(corrected);
+        self.velocity_world = self.pose.orientation.mul_vec3(corrected);
     }
 }
 
@@ -107,7 +120,7 @@ mod tests {
         let mut nav = InertialNavigator::new();
         nav.predict_imu(
             Vec3::new(0.0, 0.0, 9.80665),
-            Vec3::zero(),
+            Vec3::ZERO,
             MicrosDurationU32::from_secs(1),
         );
         assert!(fabsf(nav.pose.position.z) < 1.0e-6);

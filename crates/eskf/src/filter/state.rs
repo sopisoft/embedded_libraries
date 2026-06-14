@@ -1,4 +1,6 @@
-use math::{Matrix, Quat, Vec3};
+use glam::{Quat, Vec3};
+
+use super::Matrix;
 
 /// A 15-state error-state Kalman filter.
 ///
@@ -38,11 +40,11 @@ impl Eskf {
     /// Creates a filter with conservative default noise values.
     pub fn new() -> Self {
         Self {
-            position: Vec3::zero(),
-            velocity: Vec3::zero(),
-            orientation: Quat::identity(),
-            accel_bias: Vec3::zero(),
-            gyro_bias: Vec3::zero(),
+            position: Vec3::ZERO,
+            velocity: Vec3::ZERO,
+            orientation: Quat::IDENTITY,
+            accel_bias: Vec3::ZERO,
+            gyro_bias: Vec3::ZERO,
             covariance: Matrix::identity() * 1.0e-3,
             accel_noise: 0.5,
             gyro_noise: 0.05,

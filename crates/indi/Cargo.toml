@@ -6,4 +6,5 @@ license.workspace = true
 
 [dependencies]
 fugit = { workspace = true }
-math = { path = "../math" }
+glam = { workspace = true }
+nalgebra = { workspace = true }

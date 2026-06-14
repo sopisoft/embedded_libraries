@@ -1,5 +1,6 @@
 use fugit::MicrosDurationU32;
-use math::{EulerAngles, Matrix, Vec3};
+use glam::Vec3;
+use nalgebra::SMatrix;
 
 use crate::{
     ControlEffectiveness, IndiAllocator, IndiAllocatorConfig, IndiAttitudeConfig,
@@ -80,8 +81,8 @@ fn three_axis_controller_updates_all_axes() {
     let mut controller = IndiRateController::new(axis, axis, axis);
     let output = controller.update_rates_with_acceleration(
         Vec3::new(1.0, -1.0, 0.5),
-        Vec3::zero(),
-        Vec3::zero(),
+        Vec3::ZERO,
+        Vec3::ZERO,
         MicrosDurationU32::from_millis(20),
     );
     assert!(output.actuator.x > 0.0);
@@ -100,8 +101,8 @@ fn attitude_controller_generates_rate_targets() {
         0.2,
         -0.1,
         0.0,
-        EulerAngles::new(0.0, 0.0, 0.0),
-        Vec3::zero(),
+        Vec3::ZERO,
+        Vec3::ZERO,
         MicrosDurationU32::from_millis(20),
     );
     assert!(output.desired_rates_rad_s.x > 0.0);
@@ -110,13 +111,15 @@ fn attitude_controller_generates_rate_targets() {
 
 #[test]
 fn allocator_splits_roll_between_two_ailerons() {
-    let effectiveness =
-        ControlEffectiveness::new(Matrix::new([[10.0, -10.0], [0.0, 0.0], [0.0, 0.0]]), 0.1);
+    let effectiveness = ControlEffectiveness::new(
+        SMatrix::<f32, 3, 2>::from_row_slice(&[10.0, -10.0, 0.0, 0.0, 0.0, 0.0]),
+        0.1,
+    );
     let mut allocator = IndiAllocator::new(IndiAllocatorConfig::normalized(effectiveness, 100.0));
     let output = allocator
         .update(
             Vec3::new(4.0, 0.0, 0.0),
-            Vec3::zero(),
+            Vec3::ZERO,
             MicrosDurationU32::from_millis(20),
         )
         .unwrap();

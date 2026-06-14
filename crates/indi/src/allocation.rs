@@ -1,7 +1,11 @@
 use fugit::MicrosDurationU32;
-use math::{Matrix, Vec3};
+use glam::Vec3;
+use nalgebra::{SMatrix, SVector};
 
 use crate::LowPassFilter;
+
+type Matrix<const R: usize, const C: usize> = SMatrix<f32, R, C>;
+type Vector<const N: usize> = SVector<f32, N>;
 
 /// 3xN control effectiveness matrix.
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -24,21 +28,22 @@ impl<const N: usize> ControlEffectiveness<N> {
     pub fn allocate_delta(&self, acceleration_error_rad_s2: Vec3) -> Option<[f32; N]> {
         let transpose = self.matrix.transpose();
         let mut normal = self.matrix * transpose;
-        let lambda2 = self.regularization.max(0.0) * self.regularization.max(0.0);
+        let regularization = self.regularization.max(0.0);
+        let lambda2 = regularization * regularization;
         let mut axis = 0usize;
         while axis < 3 {
-            normal.data[axis][axis] += lambda2;
+            normal[(axis, axis)] += lambda2;
             axis += 1;
         }
 
-        let inverse = normal.inverse()?;
+        let inverse = normal.try_inverse()?;
         let axis_solution = inverse
-            * [
+            * Vector::<3>::new(
                 acceleration_error_rad_s2.x,
                 acceleration_error_rad_s2.y,
                 acceleration_error_rad_s2.z,
-            ];
-        Some(transpose * axis_solution)
+            );
+        Some((transpose * axis_solution).into())
     }
 }
 
@@ -46,10 +51,16 @@ impl ControlEffectiveness<3> {
     /// Creates a diagonal roll/pitch/yaw effectiveness model.
     pub fn diagonal(effectiveness: Vec3, regularization: f32) -> Self {
         Self::new(
-            Matrix::new([
-                [effectiveness.x, 0.0, 0.0],
-                [0.0, effectiveness.y, 0.0],
-                [0.0, 0.0, effectiveness.z],
+            Matrix::from_row_slice(&[
+                effectiveness.x,
+                0.0,
+                0.0,
+                0.0,
+                effectiveness.y,
+                0.0,
+                0.0,
+                0.0,
+                effectiveness.z,
             ]),
             regularization,
         )

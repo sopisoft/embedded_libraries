@@ -1,6 +1,7 @@
 use fugit::MicrosDurationU32;
+use glam::Vec3;
 use indi::{ControlEffectiveness, IndiAllocator, IndiAllocatorConfig};
-use math::{Matrix, Vec3};
+use nalgebra::SMatrix;
 
 fn main() {
     // This example allocates a desired angular acceleration across four
@@ -14,10 +15,8 @@ fn main() {
     // Each column is the angular acceleration produced by +1.0 actuator
     // command: [roll, pitch, yaw].
     let effectiveness = ControlEffectiveness::new(
-        Matrix::new([
-            [18.0, -18.0, 0.0, 0.0],
-            [0.0, 0.0, 15.0, 0.0],
-            [1.0, -1.0, 0.0, 10.0],
+        SMatrix::<f32, 3, 4>::from_row_slice(&[
+            18.0, -18.0, 0.0, 0.0, 0.0, 0.0, 15.0, 0.0, 1.0, -1.0, 0.0, 10.0,
         ]),
         0.2,
     );

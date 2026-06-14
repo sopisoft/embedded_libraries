@@ -4,7 +4,6 @@
 
 The workspace is split into small crates so applications can depend only on the layers they need:
 
-- `math`: vectors, quaternions, angles, poses, and small matrices
 - `kinematics`: motion and fixed-wing state propagation
 - `navigation`: inertial and fixed-wing dead reckoning
 - `ahrs`: common attitude-estimator traits and a complementary filter

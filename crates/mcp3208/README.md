@@ -17,6 +17,6 @@
 Build the RP2350 examples with:
 
 ```bash
-cargo build -p mcp3208 --example rp235x_spi_mcp3208 --target thumbv8m.main-none-eabihf
+cargo run -p mcp3208 --example rp235x_spi_mcp3208 --target thumbv8m.main-none-eabihf
 cargo build -p mcp3208 --example rp235x_spi_mcp3208_scan_all --target thumbv8m.main-none-eabihf
 ```

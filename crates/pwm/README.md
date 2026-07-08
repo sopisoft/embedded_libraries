@@ -39,6 +39,6 @@ Those are better handled in the transmitter, mixer, or linkage geometry.
 Build the RP2350 examples with:
 
 ```bash
-cargo build -p pwm --example rp235x_servo_pico2 --target thumbv8m.main-none-eabihf
-cargo build -p pwm --example rp235x_four_servo_pico2 --target thumbv8m.main-none-eabihf
+cargo run -p pwm --example rp235x_servo_pico2 --target thumbv8m.main-none-eabihf
+cargo run -p pwm --example rp235x_four_servo_pico2 --target thumbv8m.main-none-eabihf
 ```

@@ -19,6 +19,7 @@ members = [
   "crates/stabilization",
   "crates/tecs",
   "crates/tsd10",
+  "crates/imu-viz",
 ]
 
 [workspace.package]
@@ -27,14 +28,21 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
+defmt = "1"
+defmt-rtt = "1"
 embedded-hal = "1.0"
 embedded-io = "0.7"
 fugit = "0.4"
 heapless = "0.9"
 libm = "0.2"
 nalgebra = { version = "0.35.0", default-features = false, features = ["libm"] }
+panic-probe = { version = "1", features = ["print-defmt"] }
 
 [workspace.dependencies.glam]
 version = "0.33"
 default-features = false
 features = ["libm", "scalar-math"]
+
+[profile.dev]
+opt-level = 2
+codegen-units = 1

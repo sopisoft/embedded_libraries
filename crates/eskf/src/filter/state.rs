@@ -1,19 +1,16 @@
 use glam::{Quat, Vec3};
 
-use super::Matrix;
+use super::Covariance;
 
-/// A 15-state error-state Kalman filter.
+/// A 12-state error-state Kalman filter.
 ///
 /// State error ordering:
-/// - `0..3`: position
-/// - `3..6`: velocity
-/// - `6..9`: attitude
-/// - `9..12`: accelerometer bias
-/// - `12..15`: gyroscope bias
+/// - `0..3`: velocity
+/// - `3..6`: attitude
+/// - `6..9`: accelerometer bias
+/// - `9..12`: gyroscope bias
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Eskf {
-    /// Position estimate in the world frame.
-    pub position: Vec3,
     /// Velocity estimate in the world frame.
     pub velocity: Vec3,
     /// Orientation estimate.
@@ -23,7 +20,7 @@ pub struct Eskf {
     /// Gyroscope bias estimate.
     pub gyro_bias: Vec3,
     /// State covariance.
-    pub covariance: Matrix<15, 15>,
+    pub covariance: Covariance,
     /// Accelerometer white-noise density.
     pub accel_noise: f32,
     /// Gyroscope white-noise density.
@@ -40,12 +37,11 @@ impl Eskf {
     /// Creates a filter with conservative default noise values.
     pub fn new() -> Self {
         Self {
-            position: Vec3::ZERO,
             velocity: Vec3::ZERO,
             orientation: Quat::IDENTITY,
             accel_bias: Vec3::ZERO,
             gyro_bias: Vec3::ZERO,
-            covariance: Matrix::identity() * 1.0e-3,
+            covariance: Covariance::identity_scaled(1.0e-3),
             accel_noise: 0.5,
             gyro_noise: 0.05,
             accel_bias_noise: 0.01,

@@ -75,7 +75,10 @@ impl I2c for MockI2c {
         write: &[u8],
         read: &mut [u8],
     ) -> Result<(), Self::Error> {
-        read[0] = self.regs[write[0] as usize];
+        let start = (write[0] & 0x7F) as usize;
+        for (offset, byte) in read.iter_mut().enumerate() {
+            *byte = self.regs[start + offset];
+        }
         Ok(())
     }
 

@@ -1,14 +1,11 @@
-//! Fifteen-state error-state Kalman filter.
+//! Fifteen-state error-state Kalman filter specialized for embedded IMU fusion.
 
-use nalgebra::{SMatrix, SVector};
-
-type Matrix<const R: usize, const C: usize> = SMatrix<f32, R, C>;
-type Vector<const N: usize> = SVector<f32, N>;
-
+mod covariance;
 mod math;
 mod state;
 #[cfg(test)]
 mod tests;
 mod update;
 
+pub use covariance::Covariance;
 pub use state::Eskf;

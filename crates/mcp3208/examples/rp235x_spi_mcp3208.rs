@@ -8,27 +8,28 @@
 // - SPI0 MOSI  -> GPIO7
 // - SPI0 MISO  -> GPIO4
 // - MCP3208 CS -> GPIO8
-// - UART0 TX   -> GPIO0
-// - UART0 RX   -> GPIO1
 //
-// The example repeatedly samples channel 0 and prints the raw code plus the
-// converted millivolt value over UART0.
+// The example repeatedly samples channel 0 and logs the raw code plus the
+// converted millivolt value with `defmt`.
 
 #[cfg(all(target_arch = "arm", target_os = "none"))]
 mod embedded_example {
-    use core::fmt::Write;
+    use core::sync::atomic::{AtomicU32, Ordering};
 
+    use defmt_rtt as _;
     use mcp3208::{Channel, Mcp3208};
-    use panic_halt as _;
+    use panic_probe as _;
     use rp235x_hal as hal;
 
     use hal::clocks::Clock;
     use hal::fugit::RateExtU32;
-    use hal::uart::{DataBits, StopBits, UartConfig};
 
     #[unsafe(link_section = ".start_block")]
     #[used]
     pub static IMAGE_DEF: hal::block::ImageDef = hal::block::ImageDef::secure_exe();
+
+    static DEFMT_TIMESTAMP: AtomicU32 = AtomicU32::new(0);
+    defmt::timestamp!("{=u32}", DEFMT_TIMESTAMP.fetch_add(1, Ordering::Relaxed));
 
     const XTAL_FREQ_HZ: u32 = 12_000_000;
 
@@ -63,14 +64,6 @@ mod embedded_example {
             &mut pac.RESETS,
         );
 
-        let uart_pins = (pins.gpio0.into_function(), pins.gpio1.into_function());
-        let mut uart = hal::uart::UartPeripheral::new(pac.UART0, uart_pins, &mut pac.RESETS)
-            .enable(
-                UartConfig::new(115200.Hz(), DataBits::Eight, None, StopBits::One),
-                clocks.peripheral_clock.freq(),
-            )
-            .unwrap();
-
         let spi_miso = pins.gpio4.into_function::<hal::gpio::FunctionSpi>();
         let spi_sclk = pins.gpio6.into_function::<hal::gpio::FunctionSpi>();
         let spi_mosi = pins.gpio7.into_function::<hal::gpio::FunctionSpi>();
@@ -84,7 +77,7 @@ mod embedded_example {
         let cs = pins.gpio8.into_function::<hal::gpio::FunctionSioOutput>();
         let mut adc = Mcp3208::new(spi, cs);
 
-        writeln!(uart, "\r\nMCP3208 on RP2350 example\r").ok();
+        defmt::info!("MCP3208 on RP2350 example");
         let period = hal::fugit::MicrosDurationU32::from_ticks(500_000);
         let mut next_tick = timer.get_counter() + period;
 
@@ -93,7 +86,7 @@ mod embedded_example {
             let mv = adc
                 .read_voltage_mv(Channel::SingleEnded(0), 3300)
                 .unwrap_or(0);
-            writeln!(uart, "CH0 raw={raw:4}  voltage={mv:4} mV\r").ok();
+            defmt::info!("CH0 raw={:?} voltage={:?} mV", raw, mv);
             wait_until(&timer, next_tick);
             next_tick += period;
         }

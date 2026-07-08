@@ -1,8 +1,10 @@
 mod support;
 
-use core::{cell::RefCell, convert::Infallible, fmt::Write};
+use core::sync::atomic::{AtomicU32, Ordering};
+use core::{cell::RefCell, convert::Infallible};
 
 use airframe::{RcInputConfig, Vector3, apply_subset_channels};
+use defmt_rtt as _;
 use elrs::{
     FRAME_TYPE_RC_CHANNELS_PACKED, FRAME_TYPE_SUBSET_RC_CHANNELS_PACKED, FrameParser, RcChannels,
     SubsetRcChannels,
@@ -10,7 +12,7 @@ use elrs::{
 use imu::{AccelGyroSample, MargEstimator, MargSample, SharedI2c};
 use lis3mdl::{Config as Lis3mdlConfig, Lis3mdl};
 use lsm6ds3tr::LSM6DS3TR;
-use panic_halt as _;
+use panic_probe as _;
 use pwm::{Servo, ServoBank, ServoOutput};
 use rp235x_hal as hal;
 
@@ -18,13 +20,16 @@ use hal::clocks::Clock;
 use hal::fugit::RateExtU32;
 use hal::uart::{DataBits, StopBits, UartConfig};
 use support::{
-    GRAVITY_M_S2, LIS3MDL_ADDR, LSM6DS3TR_ADDR, SAMPLE_PERIOD_MS, XTAL_FREQ_HZ, build_controller,
-    init_heap, lsm_settings, servo_ranges,
+    GRAVITY_M_S2, SAMPLE_PERIOD_MS, XTAL_FREQ_HZ, build_controller, detect_lis3mdl_address,
+    detect_lsm6ds3tr_address, init_heap, lsm_settings, servo_ranges,
 };
 
 #[unsafe(link_section = ".start_block")]
 #[used]
 pub static IMAGE_DEF: hal::block::ImageDef = hal::block::ImageDef::secure_exe();
+
+static DEFMT_TIMESTAMP: AtomicU32 = AtomicU32::new(0);
+defmt::timestamp!("{=u32}", DEFMT_TIMESTAMP.fetch_add(1, Ordering::Relaxed));
 
 fn wait_until(timer: &hal::Timer<hal::timer::CopyableTimer0>, deadline: hal::timer::Instant) {
     while timer.get_counter() < deadline {
@@ -64,29 +69,23 @@ pub fn run() -> ! {
             clocks.peripheral_clock.freq(),
         )
         .unwrap();
-    let debug_pins = (pins.gpio8.into_function(), pins.gpio9.into_function());
-    let mut debug_uart = hal::uart::UartPeripheral::new(pac.UART1, debug_pins, &mut pac.RESETS)
-        .enable(
-            UartConfig::new(115200u32.Hz(), DataBits::Eight, None, StopBits::One),
-            clocks.peripheral_clock.freq(),
-        )
-        .unwrap();
-
-    let i2c = hal::i2c::I2C::i2c1(
+    let i2c = hal::i2c::I2C::i2c1_with_external_pull_up(
         pac.I2C1,
-        pins.gpio18.reconfigure(),
-        pins.gpio19.reconfigure(),
-        400u32.kHz(),
+        pins.gpio18.into_function(),
+        pins.gpio19.into_function(),
+        100u32.kHz(),
         &mut pac.RESETS,
         clocks.system_clock.freq(),
     );
     let shared_bus = RefCell::new(i2c);
+    let lsm6ds3tr_addr = detect_lsm6ds3tr_address(&shared_bus);
+    let lis3mdl_addr = detect_lis3mdl_address(&shared_bus);
     let mut accel_gyro = LSM6DS3TR::new(support::Lsm6ds3trI2c::new(
         SharedI2c::new(&shared_bus),
-        LSM6DS3TR_ADDR,
+        lsm6ds3tr_addr,
     ))
     .with_settings(lsm_settings());
-    let mut magnetometer = Lis3mdl::new(SharedI2c::new(&shared_bus), LIS3MDL_ADDR);
+    let mut magnetometer = Lis3mdl::new(SharedI2c::new(&shared_bus), lis3mdl_addr);
 
     accel_gyro.init().unwrap();
     magnetometer.init(Lis3mdlConfig::default()).unwrap();
@@ -137,7 +136,9 @@ pub fn run() -> ! {
     let tick_period = hal::fugit::MicrosDurationU32::from_ticks(SAMPLE_PERIOD_MS * 1_000);
     let mut next_tick = timer.get_counter() + tick_period;
 
-    writeln!(debug_uart, "\r\nIntegrated ELRS + IMU + servo example\r").ok();
+    defmt::info!("Integrated ELRS + IMU + servo example");
+    defmt::info!("LSM6DS3TR addr={:?}", lsm6ds3tr_addr);
+    defmt::info!("LIS3MDL addr={:?}", lis3mdl_addr.as_u8());
 
     loop {
         while crsf_uart.uart_is_readable() {
@@ -197,11 +198,18 @@ pub fn run() -> ! {
         report_divider = report_divider.wrapping_add(1);
         if report_divider >= 20 {
             report_divider = 0;
-            let euler_deg = estimate.euler.to_degrees();
-            writeln!(
-                debug_uart,
-                "mode={} roll={:>6.1} pitch={:>6.1} yaw={:>6.1} thr={:.2} ail={:.2}/{:.2} ele={:.2} rud={:.2}\r",
-                if pilot.attitude_hold_enabled { "hold" } else { "manual" },
+            let euler_deg = Vector3::new(
+                estimate.euler.x.to_degrees(),
+                estimate.euler.y.to_degrees(),
+                estimate.euler.z.to_degrees(),
+            );
+            defmt::info!(
+                "mode={:?} roll={:?} pitch={:?} yaw={:?} thr={:?} ail={:?}/{:?} ele={:?} rud={:?}",
+                if pilot.attitude_hold_enabled {
+                    "hold"
+                } else {
+                    "manual"
+                },
                 euler_deg.x,
                 euler_deg.y,
                 euler_deg.z,
@@ -210,8 +218,7 @@ pub fn run() -> ! {
                 output.surfaces.right_aileron,
                 output.surfaces.elevator,
                 output.surfaces.rudder,
-            )
-            .ok();
+            );
         }
 
         wait_until(&timer, next_tick);

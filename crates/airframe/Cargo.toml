@@ -39,9 +39,11 @@ imu = { path = "../imu" }
 lis3mdl = { path = "../lis3mdl" }
 
 [target.'thumbv8m.main-none-eabihf'.dependencies]
+defmt = { workspace = true }
+defmt-rtt = { workspace = true }
 linked_list_allocator = "0.10"
 lsm6ds3tr = "0.2.2"
-panic-halt = "1.0"
+panic-probe = { workspace = true }
 
 [target.'thumbv8m.main-none-eabihf'.dependencies.rp235x-hal]
 version = "0.4"

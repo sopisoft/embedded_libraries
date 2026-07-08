@@ -20,6 +20,35 @@ impl<'a, BUS> SharedI2c<'a, BUS> {
     }
 }
 
+/// Returns the first address whose register matches the expected ID byte.
+///
+/// This is intended for small fixed candidate sets such as alternate sensor
+/// strap addresses on breakout boards.
+pub fn find_i2c_address_by_id<BUS>(
+    bus: &RefCell<BUS>,
+    candidates: &[u8],
+    register: u8,
+    expected_id: u8,
+) -> Option<u8>
+where
+    BUS: I2c,
+{
+    let mut value = [0u8; 1];
+
+    for &address in candidates {
+        if bus
+            .borrow_mut()
+            .write_read(address, &[register], &mut value)
+            .is_ok()
+            && value[0] == expected_id
+        {
+            return Some(address);
+        }
+    }
+
+    None
+}
+
 impl<BUS> ErrorType for SharedI2c<'_, BUS>
 where
     BUS: ErrorType,

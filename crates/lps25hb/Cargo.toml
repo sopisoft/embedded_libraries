@@ -10,7 +10,9 @@ embedded-hal = { workspace = true }
 libm = { workspace = true }
 
 [target.'thumbv8m.main-none-eabihf'.dependencies]
-panic-halt = "1.0"
+defmt = { workspace = true }
+defmt-rtt = { workspace = true }
+panic-probe = { workspace = true }
 
 [target.'thumbv8m.main-none-eabihf'.dependencies.rp235x-hal]
 version = "0.4"

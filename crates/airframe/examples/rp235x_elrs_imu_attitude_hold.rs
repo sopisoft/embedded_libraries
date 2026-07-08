@@ -24,9 +24,7 @@
 //   - GPIO2 -> PWM1 A -> elevator
 //   - GPIO3 -> PWM1 B -> rudder
 //   - GPIO4 -> PWM2 A -> throttle / ESC
-// - Debug UART:
-//   - GPIO8 -> UART1 TX
-//   - GPIO9 -> UART1 RX
+// - Logs are emitted with `defmt` over RTT.
 
 #[cfg(all(target_arch = "arm", target_os = "none"))]
 #[path = "rp235x_elrs_imu_attitude_hold/embedded_main.rs"]

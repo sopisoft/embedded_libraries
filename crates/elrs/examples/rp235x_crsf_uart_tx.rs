@@ -106,11 +106,3 @@ mod embedded_example {
         }
     }
 }
-
-#[cfg(not(all(target_arch = "arm", target_os = "none")))]
-fn main() {
-    println!(
-        "This example is for RP2350 hardware. Build it with \
-         `cargo build -p elrs --example rp235x_crsf_uart_tx --target thumbv8m.main-none-eabihf`."
-    );
-}

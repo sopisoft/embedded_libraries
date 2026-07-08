@@ -39,5 +39,5 @@
 Build the RP2350 example with:
 
 ```bash
-cargo build -p tsd10 --example rp235x_uart_tsd10 --target thumbv8m.main-none-eabihf
+cargo run -p tsd10 --example rp235x_uart_tsd10 --target thumbv8m.main-none-eabihf
 ```

@@ -9,8 +9,6 @@
 // - GPIO7  -> SDI / MOSI
 // - GPIO4  -> SDO / MISO
 // - GPIO8  -> CS
-// - GPIO0  -> UART0 TX for debug prints
-// - GPIO1  -> UART0 RX for an optional console
 // - 3V3    -> VDD
 // - GND    -> GND
 //
@@ -21,21 +19,24 @@
 
 #[cfg(all(target_arch = "arm", target_os = "none"))]
 mod embedded_example {
-    use core::fmt::Write;
+    use core::sync::atomic::{AtomicU32, Ordering};
 
+    use defmt_rtt as _;
     use lps25hb::{
         Config, DEVICE_ID, Lps25hb, STANDARD_SEA_LEVEL_PRESSURE_HPA, pressure_to_altitude_m,
     };
-    use panic_halt as _;
+    use panic_probe as _;
     use rp235x_hal as hal;
 
     use hal::clocks::Clock;
     use hal::fugit::RateExtU32;
-    use hal::uart::{DataBits, StopBits, UartConfig};
 
     #[unsafe(link_section = ".start_block")]
     #[used]
     pub static IMAGE_DEF: hal::block::ImageDef = hal::block::ImageDef::secure_exe();
+
+    static DEFMT_TIMESTAMP: AtomicU32 = AtomicU32::new(0);
+    defmt::timestamp!("{=u32}", DEFMT_TIMESTAMP.fetch_add(1, Ordering::Relaxed));
 
     const XTAL_FREQ_HZ: u32 = 12_000_000;
     const SEA_LEVEL_PRESSURE_HPA: f32 = STANDARD_SEA_LEVEL_PRESSURE_HPA;
@@ -71,14 +72,6 @@ mod embedded_example {
             &mut pac.RESETS,
         );
 
-        let uart_pins = (pins.gpio0.into_function(), pins.gpio1.into_function());
-        let mut uart = hal::uart::UartPeripheral::new(pac.UART0, uart_pins, &mut pac.RESETS)
-            .enable(
-                UartConfig::new(115200.Hz(), DataBits::Eight, None, StopBits::One),
-                clocks.peripheral_clock.freq(),
-            )
-            .unwrap();
-
         let spi_miso = pins.gpio4.into_function::<hal::gpio::FunctionSpi>();
         let spi_sclk = pins.gpio6.into_function::<hal::gpio::FunctionSpi>();
         let spi_mosi = pins.gpio7.into_function::<hal::gpio::FunctionSpi>();
@@ -93,14 +86,12 @@ mod embedded_example {
         let mut barometer = Lps25hb::new_spi(spi, cs);
         barometer.init(Config::akizuki_style()).unwrap();
 
-        writeln!(uart, "\r\nRP2350 + LPS25HB SPI example\r").ok();
-        writeln!(
-            uart,
-            "WHO_AM_I = 0x{:02X} (expected 0x{:02X})\r",
+        defmt::info!("RP2350 + LPS25HB SPI example");
+        defmt::info!(
+            "WHO_AM_I = {:?} (expected {:?})",
             barometer.who_am_i().unwrap(),
             DEVICE_ID
-        )
-        .ok();
+        );
 
         let period = hal::fugit::MicrosDurationU32::from_ticks(250_000);
         let mut next_tick = timer.get_counter() + period;
@@ -108,12 +99,12 @@ mod embedded_example {
             let measurement = barometer.read_measurement().unwrap();
             let altitude_m =
                 pressure_to_altitude_m(measurement.pressure_hpa, SEA_LEVEL_PRESSURE_HPA);
-            writeln!(
-                uart,
-                "pressure={:>7.2} hPa  temp={:>6.2} C  altitude={:>7.2} m\r",
-                measurement.pressure_hpa, measurement.temperature_c, altitude_m,
-            )
-            .ok();
+            defmt::info!(
+                "pressure={:?} hPa temp={:?} C altitude={:?} m",
+                measurement.pressure_hpa,
+                measurement.temperature_c,
+                altitude_m,
+            );
             wait_until(&timer, next_tick);
             next_tick += period;
         }

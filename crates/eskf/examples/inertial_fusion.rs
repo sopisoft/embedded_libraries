@@ -37,9 +37,7 @@ fn main() {
 
     // Correction:
     // Pretend that slower sensors now provide absolute information.
-    filter.correct_position(Vec3::new(42.0, 8.0, 120.0), 5.0);
     filter.correct_velocity(Vec3::new(21.0, 0.5, -0.1), 1.0);
-    filter.correct_altitude(118.0, 0.3);
     filter.correct_forward_speed(20.5, 0.5);
     filter.correct_heading(FRAC_PI_4, 0.2);
     filter.correct_orientation(
@@ -53,10 +51,6 @@ fn main() {
     );
 
     let attitude_deg = euler_deg(filter.orientation);
-    println!(
-        "Position estimate: ({:.2}, {:.2}, {:.2}) m",
-        filter.position.x, filter.position.y, filter.position.z
-    );
     println!(
         "Velocity estimate: ({:.2}, {:.2}, {:.2}) m/s",
         filter.velocity.x, filter.velocity.y, filter.velocity.z

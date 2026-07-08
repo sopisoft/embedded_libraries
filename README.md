@@ -34,3 +34,11 @@ cargo test --workspace
 cargo check --workspace --examples
 cargo doc --workspace --no-deps
 ```
+
+For RP2350 hardware examples, `cargo run` uses the `probe-rs` runner from
+`.cargo/config.toml`, so commands like this will flash and start the firmware on
+the connected board:
+
+```bash
+cargo run -p mcp3208 --example rp235x_spi_mcp3208 --target thumbv8m.main-none-eabihf
+```

@@ -27,7 +27,6 @@ CRSF / ExpressLRS protocol helpers for `no_std` targets.
 Build the RP2350 examples with:
 
 ```bash
-cargo build -p elrs --example rp235x_crsf_uart_tx --target thumbv8m.main-none-eabihf
-cargo build -p elrs --example rp235x_crsf_uart_rx --target thumbv8m.main-none-eabihf
+cargo run -p elrs --example rp235x_crsf_uart_tx --target thumbv8m.main-none-eabihf
+cargo run -p elrs --example rp235x_crsf_uart_rx --target thumbv8m.main-none-eabihf
 ```
-

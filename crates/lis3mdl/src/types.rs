@@ -15,6 +15,15 @@ impl Address {
     pub const fn as_u8(self) -> u8 {
         self as u8
     }
+
+    /// Converts a 7-bit I2C address into the matching enum variant.
+    pub const fn from_u8(address: u8) -> Option<Self> {
+        match address {
+            0x1C => Some(Self::Addr1c),
+            0x1E => Some(Self::Addr1e),
+            _ => None,
+        }
+    }
 }
 
 /// Magnetic full-scale range.

@@ -3,12 +3,22 @@ fmt-all = "fmt --all"
 fmt-check = "fmt --all -- --check"
 lint = "clippy --workspace --all-targets --all-features -- -D warnings"
 
+[env]
+DEFMT_LOG = "debug"
+
+[build]
+target = "thumbv8m.main-none-eabihf"
+
 [target.thumbv8m.main-none-eabihf]
+linker = "flip-link"
+runner = "scripts/cargo-runner.sh"
 rustflags = [
-    "-C",
-    "link-arg=--nmagic",
-    "-C",
-    "link-arg=-Tlink.x",
-    "-C",
-    "target-cpu=cortex-m33",
+  "-C",
+  "link-arg=--nmagic",
+  "-C",
+  "link-arg=-Tlink.x",
+  "-C",
+  "link-arg=-Tdefmt.x",
+  "-C",
+  "target-cpu=cortex-m33",
 ]

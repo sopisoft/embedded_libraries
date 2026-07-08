@@ -1,5 +1,6 @@
 use airframe::{AttitudeHoldLimits, FixedWingController, ServoMap};
 use embedded_hal::i2c::I2c;
+use imu::find_i2c_address_by_id;
 use linked_list_allocator::LockedHeap;
 use lis3mdl::Address as Lis3mdlAddress;
 use lsm6ds3tr::{
@@ -10,11 +11,13 @@ use stabilization::{AxisErrorMode, CascadeAttitudeController, CascadeAxis};
 
 pub const XTAL_FREQ_HZ: u32 = 12_000_000;
 pub const SAMPLE_PERIOD_MS: u32 = 10;
-pub const LSM6DS3TR_ADDR: u8 = 0x6A;
-pub const LIS3MDL_ADDR: Lis3mdlAddress = Lis3mdlAddress::Addr1c;
 pub const GRAVITY_M_S2: f32 = 9.80665;
 
 const HEAP_SIZE: usize = 4096;
+const WHO_AM_I_REGISTER: u8 = 0x0F;
+const LSM6DS3TR_DEVICE_ID: u8 = 0x6A;
+const LSM6DS3TR_ADDR_CANDIDATES: [u8; 2] = [0x6A, 0x6B];
+const LIS3MDL_ADDR_CANDIDATES: [u8; 2] = [0x1C, 0x1E];
 
 #[global_allocator]
 static HEAP: LockedHeap = LockedHeap::empty();
@@ -63,6 +66,34 @@ pub fn lsm_settings() -> LsmSettings {
                 .with_scale(AccelScale::_4G),
         )
         .with_gyro(GyroSettings::new())
+}
+
+pub fn detect_lsm6ds3tr_address<BUS>(shared_bus: &core::cell::RefCell<BUS>) -> u8
+where
+    BUS: I2c,
+{
+    find_i2c_address_by_id(
+        shared_bus,
+        &LSM6DS3TR_ADDR_CANDIDATES,
+        WHO_AM_I_REGISTER,
+        LSM6DS3TR_DEVICE_ID,
+    )
+    .unwrap_or_else(|| panic!("LSM6DS3TR-C not found at 0x6A or 0x6B"))
+}
+
+pub fn detect_lis3mdl_address<BUS>(shared_bus: &core::cell::RefCell<BUS>) -> Lis3mdlAddress
+where
+    BUS: I2c,
+{
+    let address = find_i2c_address_by_id(
+        shared_bus,
+        &LIS3MDL_ADDR_CANDIDATES,
+        WHO_AM_I_REGISTER,
+        lis3mdl::DEVICE_ID,
+    )
+    .unwrap_or_else(|| panic!("LIS3MDL not found at 0x1C or 0x1E"));
+
+    Lis3mdlAddress::from_u8(address).unwrap()
 }
 
 pub fn servo_ranges() -> ServoSet<5> {

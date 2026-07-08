@@ -46,6 +46,6 @@ The Akizuki appendix notes that a shipped module can have a pressure offset of a
 Build the RP2350 examples with:
 
 ```bash
-cargo build -p lps25hb --example rp235x_i2c_lps25hb --target thumbv8m.main-none-eabihf
-cargo build -p lps25hb --example rp235x_spi_lps25hb --target thumbv8m.main-none-eabihf
+cargo run -p lps25hb --example rp235x_i2c_lps25hb --target thumbv8m.main-none-eabihf
+cargo run -p lps25hb --example rp235x_spi_lps25hb --target thumbv8m.main-none-eabihf
 ```

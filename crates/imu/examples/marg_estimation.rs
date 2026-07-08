@@ -1,13 +1,13 @@
 use fugit::MicrosDurationU32;
-use imu::{AccelGyroSample, MargEstimator, MargSample, Vector3};
+use imu::{AccelGyroSample, ImuEstimator, MargSample, Vector3};
 
 fn main() {
     // This example demonstrates the intended layering:
     // 1. your sensor drivers produce one `MargSample`,
-    // 2. `imu::MargEstimator` fuses attitude and relative altitude,
+    // 2. `imu::ImuEstimator` lets you switch between Madgwick and ESKF backends,
     // 3. higher-level control code consumes the result.
 
-    let mut estimator = MargEstimator::new(0.08);
+    let mut estimator = ImuEstimator::eskf();
     let dt = MicrosDurationU32::from_millis(10);
 
     // Pretend the board is sitting flat on the desk:

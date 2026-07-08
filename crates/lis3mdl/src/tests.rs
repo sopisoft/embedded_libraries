@@ -1,8 +1,7 @@
 use embedded_hal::i2c::{Error as HalError, ErrorKind, ErrorType, I2c, Operation};
 
 use crate::registers::{
-    CTRL_REG1, CTRL_REG2, CTRL_REG3, CTRL_REG4, CTRL_REG5, OUT_X_H, OUT_X_L, OUT_Y_H, OUT_Y_L,
-    OUT_Z_H, OUT_Z_L, STATUS_REG, WHO_AM_I,
+    CTRL_REG1, CTRL_REG2, CTRL_REG3, CTRL_REG4, CTRL_REG5, OUT_X_L, STATUS_REG, WHO_AM_I,
 };
 use crate::{Address, Config, DEVICE_ID, FullScale, Lis3mdl};
 
@@ -50,7 +49,10 @@ impl I2c for MockI2c {
         write: &[u8],
         read: &mut [u8],
     ) -> Result<(), Self::Error> {
-        read[0] = self.regs[write[0] as usize];
+        let start = (write[0] & 0x7F) as usize;
+        for (offset, byte) in read.iter_mut().enumerate() {
+            *byte = self.regs[start + offset];
+        }
         Ok(())
     }
 
@@ -87,11 +89,11 @@ fn init_programs_default_registers() {
 fn read_magnetic_mgauss_uses_selected_scale() {
     let mut i2c = MockI2c::new();
     i2c.regs[OUT_X_L as usize] = 0xBA;
-    i2c.regs[OUT_X_H as usize] = 0x1A;
-    i2c.regs[OUT_Y_L as usize] = 0;
-    i2c.regs[OUT_Y_H as usize] = 0;
-    i2c.regs[OUT_Z_L as usize] = 0;
-    i2c.regs[OUT_Z_H as usize] = 0;
+    i2c.regs[(OUT_X_L + 1) as usize] = 0x1A;
+    i2c.regs[(OUT_X_L + 2) as usize] = 0;
+    i2c.regs[(OUT_X_L + 3) as usize] = 0;
+    i2c.regs[(OUT_X_L + 4) as usize] = 0;
+    i2c.regs[(OUT_X_L + 5) as usize] = 0;
 
     let mut lis3mdl = Lis3mdl::new(i2c, Address::Addr1c);
     lis3mdl

@@ -62,5 +62,5 @@ The RP2350 example shows a full control chain:
 Build it with:
 
 ```bash
-cargo build -p airframe --example rp235x_elrs_imu_attitude_hold --target thumbv8m.main-none-eabihf
+cargo run -p airframe --example rp235x_elrs_imu_attitude_hold --target thumbv8m.main-none-eabihf
 ```

@@ -2,25 +2,23 @@
 #![cfg_attr(all(target_arch = "arm", target_os = "none"), no_main)]
 
 // This example targets an RP2350-class MCU such as Raspberry Pi Pico 2.
-// It reads the Akizuki TSD10 LiDAR over UART0 and prints the decoded distance
-// over UART1.
+// It reads the Akizuki TSD10 LiDAR over UART0 and logs the decoded distance
+// with `defmt`.
 //
 // Wiring idea:
 // - GPIO0  -> TSD10 RX
 // - GPIO1  <- TSD10 TX
 // - 5V     -> TSD10 VCC
 // - GND    -> TSD10 GND
-// - GPIO4  -> UART1 TX for debug prints
-// - GPIO5  -> UART1 RX for an optional console
-//
 // The TSD10 itself requires 4.5 V to 5.5 V power. Confirm the UART IO voltage
 // compatibility of your exact board before wiring it directly to a 3.3 V MCU.
 
 #[cfg(all(target_arch = "arm", target_os = "none"))]
 mod embedded_example {
-    use core::fmt::Write;
+    use core::sync::atomic::{AtomicU32, Ordering};
 
-    use panic_halt as _;
+    use defmt_rtt as _;
+    use panic_probe as _;
     use rp235x_hal as hal;
     use tsd10::Tsd10;
 
@@ -31,6 +29,9 @@ mod embedded_example {
     #[unsafe(link_section = ".start_block")]
     #[used]
     pub static IMAGE_DEF: hal::block::ImageDef = hal::block::ImageDef::secure_exe();
+
+    static DEFMT_TIMESTAMP: AtomicU32 = AtomicU32::new(0);
+    defmt::timestamp!("{=u32}", DEFMT_TIMESTAMP.fetch_add(1, Ordering::Relaxed));
 
     const XTAL_FREQ_HZ: u32 = 12_000_000;
 
@@ -66,34 +67,24 @@ mod embedded_example {
             )
             .unwrap();
 
-        let debug_pins = (pins.gpio4.into_function(), pins.gpio5.into_function());
-        let mut debug_uart = hal::uart::UartPeripheral::new(pac.UART1, debug_pins, &mut pac.RESETS)
-            .enable(
-                UartConfig::new(115200u32.Hz(), DataBits::Eight, None, StopBits::One),
-                clocks.peripheral_clock.freq(),
-            )
-            .unwrap();
-
         let mut lidar = Tsd10::new(lidar_uart);
 
-        writeln!(debug_uart, "\r\nRP2350 + TSD10 UART example\r").ok();
+        defmt::info!("RP2350 + TSD10 UART example");
 
         loop {
             match lidar.read_measurement() {
                 Ok(measurement) if measurement.is_out_of_range() => {
-                    writeln!(debug_uart, "distance=out_of_range\r").ok();
+                    defmt::warn!("distance=out_of_range");
                 }
                 Ok(measurement) => {
-                    writeln!(
-                        debug_uart,
-                        "distance={:>5} mm  range={:>4.2} m\r",
+                    defmt::info!(
+                        "distance={:?} mm range={:?} m",
                         measurement.distance_mm,
                         measurement.distance_m().unwrap()
-                    )
-                    .ok();
+                    );
                 }
                 Err(_) => {
-                    writeln!(debug_uart, "UART / parser error\r").ok();
+                    defmt::error!("UART / parser error");
                 }
             }
         }

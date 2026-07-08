@@ -1,7 +1,7 @@
 # MCP3208 Examples
 
 - `read_voltage`: host-runnable introduction to raw, normalized, and millivolt reads
-- `rp235x_spi_mcp3208`: RP2350 hardware example using SPI0 and UART0
+- `rp235x_spi_mcp3208`: RP2350 hardware example using SPI0 and `defmt` RTT logging
 - `rp235x_spi_mcp3208_scan_all`: RP2350 hardware example that scans all eight channels
 
 Read the host example first if you want to understand the MCP3208 frame format.

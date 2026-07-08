@@ -2,25 +2,28 @@
 #![cfg_attr(all(target_arch = "arm", target_os = "none"), no_main)]
 
 // This example is a more practical RP2350 + MCP3208 setup than the single-
-// channel introduction. It scans all eight single-ended channels and prints
-// the result table over UART, which is often how you start bringing up sensors
+// channel introduction. It scans all eight single-ended channels and logs the
+// result table with `defmt`, which is often how you start bringing up sensors
 // such as potentiometers, pressure transducers, or current monitors.
 
 #[cfg(all(target_arch = "arm", target_os = "none"))]
 mod embedded_example {
-    use core::fmt::Write;
+    use core::sync::atomic::{AtomicU32, Ordering};
 
+    use defmt_rtt as _;
     use mcp3208::{Channel, Mcp3208};
-    use panic_halt as _;
+    use panic_probe as _;
     use rp235x_hal as hal;
 
     use hal::clocks::Clock;
     use hal::fugit::RateExtU32;
-    use hal::uart::{DataBits, StopBits, UartConfig};
 
     #[unsafe(link_section = ".start_block")]
     #[used]
     pub static IMAGE_DEF: hal::block::ImageDef = hal::block::ImageDef::secure_exe();
+
+    static DEFMT_TIMESTAMP: AtomicU32 = AtomicU32::new(0);
+    defmt::timestamp!("{=u32}", DEFMT_TIMESTAMP.fetch_add(1, Ordering::Relaxed));
 
     const XTAL_FREQ_HZ: u32 = 12_000_000;
     const VREF_MV: u16 = 3300;
@@ -56,14 +59,6 @@ mod embedded_example {
             &mut pac.RESETS,
         );
 
-        let uart_pins = (pins.gpio0.into_function(), pins.gpio1.into_function());
-        let mut uart = hal::uart::UartPeripheral::new(pac.UART0, uart_pins, &mut pac.RESETS)
-            .enable(
-                UartConfig::new(115200u32.Hz(), DataBits::Eight, None, StopBits::One),
-                clocks.peripheral_clock.freq(),
-            )
-            .unwrap();
-
         let spi_miso = pins.gpio4.into_function::<hal::gpio::FunctionSpi>();
         let spi_sclk = pins.gpio6.into_function::<hal::gpio::FunctionSpi>();
         let spi_mosi = pins.gpio7.into_function::<hal::gpio::FunctionSpi>();
@@ -77,7 +72,7 @@ mod embedded_example {
         let cs = pins.gpio8.into_function::<hal::gpio::FunctionSioOutput>();
         let mut adc = Mcp3208::new(spi, cs);
 
-        writeln!(uart, "\r\nScanning MCP3208 channels on RP2350\r").ok();
+        defmt::info!("Scanning MCP3208 channels on RP2350");
         let period = hal::fugit::MicrosDurationU32::from_ticks(1_000_000);
         let mut next_tick = timer.get_counter() + period;
 
@@ -86,9 +81,8 @@ mod embedded_example {
                 let channel = Channel::SingleEnded(channel_index);
                 let raw = adc.read_raw(channel).unwrap_or(0);
                 let mv = adc.read_voltage_mv(channel, VREF_MV).unwrap_or(0);
-                writeln!(uart, "CH{channel_index}: raw={raw:4} voltage={mv:4} mV\r").ok();
+                defmt::info!("CH{:?}: raw={:?} voltage={:?} mV", channel_index, raw, mv);
             }
-            writeln!(uart, "\r").ok();
             wait_until(&timer, next_tick);
             next_tick += period;
         }

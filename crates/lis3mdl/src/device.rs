@@ -1,13 +1,14 @@
 use embedded_hal::i2c::I2c;
 
 use crate::registers::{
-    CTRL_REG1, CTRL_REG2, CTRL_REG3, CTRL_REG4, CTRL_REG5, OUT_X_H, OUT_X_L, OUT_Y_H, OUT_Y_L,
-    OUT_Z_H, OUT_Z_L, STATUS_REG, WHO_AM_I,
+    CTRL_REG1, CTRL_REG2, CTRL_REG3, CTRL_REG4, CTRL_REG5, OUT_X_L, STATUS_REG, WHO_AM_I,
 };
 use crate::{
     Address, Config, DEVICE_ID, DataRate, Error, FullScale, MagneticField, MeasurementMode,
     OperatingMode, RawMagneticField,
 };
+
+const AUTO_INCREMENT: u8 = 0x80;
 
 /// LIS3MDL driver.
 #[derive(Debug)]
@@ -121,10 +122,15 @@ where
 
     /// Reads raw magnetic counts.
     pub fn read_raw_magnetic(&mut self) -> Result<RawMagneticField, Error<I2C::Error>> {
+        let mut buffer = [0u8; 6];
+        self.i2c
+            .write_read(self.address, &[OUT_X_L | AUTO_INCREMENT], &mut buffer)
+            .map_err(Error::Bus)?;
+
         Ok(RawMagneticField {
-            x: self.read_i16(OUT_X_L, OUT_X_H)?,
-            y: self.read_i16(OUT_Y_L, OUT_Y_H)?,
-            z: self.read_i16(OUT_Z_L, OUT_Z_H)?,
+            x: i16::from_le_bytes([buffer[0], buffer[1]]),
+            y: i16::from_le_bytes([buffer[2], buffer[3]]),
+            z: i16::from_le_bytes([buffer[4], buffer[5]]),
         })
     }
 
@@ -137,12 +143,6 @@ where
             y_mgauss: raw.y as f32 * sensitivity,
             z_mgauss: raw.z as f32 * sensitivity,
         })
-    }
-
-    fn read_i16(&mut self, low_reg: u8, high_reg: u8) -> Result<i16, Error<I2C::Error>> {
-        let low = self.read_register(low_reg)?;
-        let high = self.read_register(high_reg)?;
-        Ok(i16::from_le_bytes([low, high]))
     }
 
     fn update_register(

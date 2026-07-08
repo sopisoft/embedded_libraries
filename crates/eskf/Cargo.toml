@@ -7,4 +7,3 @@ license.workspace = true
 [dependencies]
 fugit = { workspace = true }
 glam = { workspace = true }
-nalgebra = { workspace = true }

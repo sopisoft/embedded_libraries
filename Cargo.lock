@@ -1734,6 +1734,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "gs1502"
+version = "0.1.0"
+dependencies = [
+ "embedded-hal 1.0.0",
+ "fugit 0.4.0",
+ "pwm",
+]
+
+[[package]]
 name = "half"
 version = "2.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -9,6 +9,7 @@ The workspace is split into small crates so applications can depend only on the 
 - `ahrs`: common attitude-estimator traits and a complementary filter
 - `madgwick`: Madgwick AHRS filter
 - `eskf`: error-state Kalman filter
+- `gs1502`: GS-1502 linear servo PWM control
 - `indi`: simplified Incremental Nonlinear Dynamic Inversion rate control
 - `imu`: shared-bus helpers and 9-DoF estimation glue
 - `lis3mdl`: LIS3MDL driver

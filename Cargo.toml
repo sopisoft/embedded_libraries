@@ -6,6 +6,7 @@ members = [
   "crates/control",
   "crates/elrs",
   "crates/eskf",
+  "crates/gs1502",
   "crates/imu",
   "crates/indi",
   "crates/kinematics",

@@ -39,7 +39,7 @@ fn startup_is_failsafe_with_idle_throttle_and_retracted_linear_servo() {
     assert_eq!(output.gs1502_position, Gs1502Position::Retracted);
     assert_eq!(
         output.control.pulses[OutputChannel::Throttle.index()].as_micros(),
-        1_000
+        1_500
     );
     assert_eq!(output.control.pulses[0].as_micros(), 1_500);
 }
@@ -101,6 +101,24 @@ fn valid_crsf_frame_enables_manual_output() {
 }
 
 #[test]
+fn rc_frame_from_receiver_address_is_accepted() {
+    let mut controller = FlightController::new(Config::default());
+    let bytes = RcChannels::from_micros([
+        1_500, 1_500, 1_200, 1_500, 1_000, 1_000, 1_000, 1_000, 1_000, 1_000, 1_000, 1_000, 1_000,
+        1_000, 1_000, 1_000,
+    ])
+    .encode_frame(DeviceAddress::RECEIVER)
+    .unwrap()
+    .to_bytes()
+    .unwrap();
+    for byte in bytes {
+        controller.push_crsf_byte(byte, 100);
+    }
+    assert_eq!(controller.channels().micros(2).unwrap(), 1_200);
+    assert!(controller.rc_is_alive(100));
+}
+
+#[test]
 fn stale_rc_frame_returns_to_failsafe() {
     let mut controller = FlightController::new(Config::default());
     let mut channels = neutral_channels();
@@ -119,7 +137,7 @@ fn stale_rc_frame_returns_to_failsafe() {
     assert_eq!(output.gs1502_position, Gs1502Position::Retracted);
     assert_eq!(
         output.control.pulses[OutputChannel::Throttle.index()].as_micros(),
-        1_000
+        1_500
     );
 }
 
@@ -170,7 +188,7 @@ fn attitude_hold_output_stays_finite() {
     send_channels(
         &mut controller,
         RcChannels::from_micros([
-            1_650, 1_400, 1_400, 1_550, 1_800, 1_000, 1_000, 1_000, 1_000, 1_000, 1_000, 1_000,
+            1_650, 1_400, 1_400, 1_550, 1_000, 1_800, 1_000, 1_000, 1_000, 1_000, 1_000, 1_000,
             1_000, 1_000, 1_000, 1_000,
         ]),
         20,
@@ -185,4 +203,36 @@ fn attitude_hold_output_stays_finite() {
             .all(|pulse| pulse.as_micros() > 0)
     );
     assert!(output.estimate.euler.is_finite());
+}
+
+#[test]
+fn altitude_hold_corrects_height_without_reverse_thrust_and_resets_stale_target() {
+    let mut controller = FlightController::new(Config::default());
+    let mut channels = neutral_channels();
+    channels.set_micros(2, 1_500);
+    channels.set_micros(5, 1_800);
+    send_channels(&mut controller, channels, 20);
+
+    let engaged = controller.update_with_altitude(level_sample(), Some(100.0), 20, CONTROL_PERIOD);
+    assert_eq!(engaged.mode, Mode::AltitudeHold);
+    assert_eq!(engaged.altitude_target_m, Some(100.0));
+
+    let below_target =
+        controller.update_with_altitude(level_sample(), Some(95.0), 30, CONTROL_PERIOD);
+    assert_eq!(below_target.altitude_target_m, Some(100.0));
+    assert!(below_target.control.axes.throttle > engaged.control.axes.throttle);
+    assert!(below_target.control.axes.pitch > engaged.control.axes.pitch);
+
+    let above_target =
+        controller.update_with_altitude(level_sample(), Some(110.0), 40, CONTROL_PERIOD);
+    assert!(above_target.control.axes.throttle.get() >= 0.5);
+
+    let unavailable = controller.update_with_altitude(level_sample(), None, 50, CONTROL_PERIOD);
+    assert_eq!(unavailable.mode, Mode::AttitudeHold);
+    assert_eq!(unavailable.altitude_target_m, None);
+
+    let recovered =
+        controller.update_with_altitude(level_sample(), Some(120.0), 60, CONTROL_PERIOD);
+    assert_eq!(recovered.mode, Mode::AltitudeHold);
+    assert_eq!(recovered.altitude_target_m, Some(120.0));
 }

@@ -24,3 +24,5 @@ Flash an RP2350 example through the configured `probe-rs` runner:
 ```bash
 cargo rp2350 --example rp2350
 ```
+
+書き込み時に `Target device did not respond` になる場合は、Pico 2へ3V3/GND/SWDIO/SWCLKを接続し、デバッグプローブが対象基板へ接続されていることを確認してください。

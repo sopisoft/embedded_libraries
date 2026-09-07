@@ -5,7 +5,9 @@ use imu::{
     AccelGyroSample, Acceleration, AngularVelocity, MagneticField, MargSample, SharedI2c, Vec3,
 };
 use lis3mdl::{Address as Lis3mdlAddress, Config as Lis3mdlConfig, Lis3mdl};
-use lps25hb::{Address as Lps25hbAddress, Config as Lps25hbConfig, Lps25hb};
+use lps25hb::{
+    Address as Lps25hbAddress, Config as Lps25hbConfig, Lps25hb, OutputDataRate, PressureAverage,
+};
 use lsm6ds3tr::{
     AccelSampleRate, AccelScale, AccelSettings, GyroSettings, LSM6DS3TR, LsmSettings,
     interface::Interface,
@@ -50,15 +52,17 @@ type AccelGyro<'a, BUS> = LSM6DS3TR<Lsm6ds3trI2c<SharedI2c<'a, BUS>>>;
 type Magnetometer<'a, BUS> = Lis3mdl<SharedI2c<'a, BUS>>;
 type Barometer<'a, BUS> = Lps25hb<lps25hb::i2c::I2cInterface<SharedI2c<'a, BUS>>>;
 
-pub struct Sensors<'a, BUS: I2c> {
-    accel_gyro: AccelGyro<'a, BUS>,
-    magnetometer: Magnetometer<'a, BUS>,
-    barometer: Barometer<'a, BUS>,
+pub struct Sensors<'a, ImuBus: I2c, BaroBus: I2c<Error = ImuBus::Error>> {
+    accel_gyro: AccelGyro<'a, ImuBus>,
+    magnetometer: Magnetometer<'a, ImuBus>,
+    barometer: Barometer<'a, BaroBus>,
+    barometer_ready: bool,
 }
 
-impl<'a, BUS: I2c> Sensors<'a, BUS> {
+impl<'a, ImuBus: I2c, BaroBus: I2c<Error = ImuBus::Error>> Sensors<'a, ImuBus, BaroBus> {
     pub fn with_addresses(
-        bus: &'a RefCell<BUS>,
+        imu_bus: &'a RefCell<ImuBus>,
+        baro_bus: &'a RefCell<BaroBus>,
         accel_gyro_address: u8,
         magnetometer_address: Lis3mdlAddress,
         barometer_address: Lps25hbAddress,
@@ -71,24 +75,36 @@ impl<'a, BUS: I2c> Sensors<'a, BUS> {
             )
             .with_gyro(GyroSettings::new());
         Self {
-            accel_gyro: LSM6DS3TR::new(Lsm6ds3trI2c::new(SharedI2c::new(bus), accel_gyro_address))
-                .with_settings(settings),
-            magnetometer: Lis3mdl::new(SharedI2c::new(bus), magnetometer_address),
-            barometer: Lps25hb::new_i2c(SharedI2c::new(bus), barometer_address),
+            accel_gyro: LSM6DS3TR::new(Lsm6ds3trI2c::new(
+                SharedI2c::new(imu_bus),
+                accel_gyro_address,
+            ))
+            .with_settings(settings),
+            magnetometer: Lis3mdl::new(SharedI2c::new(imu_bus), magnetometer_address),
+            barometer: Lps25hb::new_i2c(SharedI2c::new(baro_bus), barometer_address),
+            barometer_ready: false,
         }
     }
 
-    pub fn init(&mut self) -> Result<(), SensorError<BUS::Error>> {
+    pub fn init(&mut self) -> Result<(), SensorError<ImuBus::Error>> {
         self.accel_gyro.init().map_err(SensorError::AccelGyro)?;
         self.magnetometer
             .init(Lis3mdlConfig::default())
             .map_err(SensorError::Magnetometer)?;
-        self.barometer
-            .init(Lps25hbConfig::default_continuous())
-            .map_err(SensorError::Barometer)
+        let mut barometer_config = Lps25hbConfig::default_continuous();
+        barometer_config.output_data_rate = OutputDataRate::Hz25;
+        barometer_config.pressure_average = PressureAverage::Avg32;
+        if self.barometer.init(barometer_config).is_ok() {
+            self.barometer_ready = true;
+        }
+        Ok(())
     }
 
-    pub fn read_marg(&mut self) -> Result<MargSample, SensorError<BUS::Error>> {
+    pub const fn barometer_available(&self) -> bool {
+        self.barometer_ready
+    }
+
+    pub fn read_marg(&mut self) -> Result<MargSample, SensorError<ImuBus::Error>> {
         let accel = self
             .accel_gyro
             .read_accel()
@@ -114,7 +130,10 @@ impl<'a, BUS: I2c> Sensors<'a, BUS> {
         ))
     }
 
-    pub fn barometric_altitude(&mut self) -> Result<Option<f32>, SensorError<BUS::Error>> {
+    pub fn barometric_altitude(&mut self) -> Result<Option<f32>, SensorError<ImuBus::Error>> {
+        if !self.barometer_ready {
+            return Ok(None);
+        }
         if !self
             .barometer
             .pressure_data_ready()

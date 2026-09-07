@@ -12,6 +12,7 @@ fugit = { workspace = true }
 imu = { path = "../imu" }
 pwm = { path = "../pwm" }
 stabilization = { path = "../stabilization" }
+tecs = { path = "../tecs" }
 
 [dev-dependencies]
 glam = { workspace = true }

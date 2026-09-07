@@ -4,6 +4,7 @@ use control::PidController;
 use fugit::MicrosDurationU32;
 use pwm::{ServoRange, ServoSet};
 use stabilization::{AxisErrorMode, CascadeAttitudeController, CascadeAxis};
+use tecs::{TecsConfig, TecsController};
 
 /// Number of conventional fixed-wing outputs.
 pub const OUTPUT_COUNT: usize = 5;
@@ -14,7 +15,7 @@ pub const CONTROL_PERIOD: MicrosDurationU32 = MicrosDurationU32::from_millis(10)
 /// Default time after which a missing RC frame activates failsafe.
 pub const DEFAULT_FAILSAFE_TIMEOUT: MicrosDurationU32 = MicrosDurationU32::from_millis(100);
 
-pub const GS1502_CHANNEL: RcChannel = RcChannel::Ch6;
+pub const GS1502_CHANNEL: RcChannel = RcChannel::Ch5;
 pub const GS1502_SWITCH_THRESHOLD_US: u16 = 1_600;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -37,6 +38,7 @@ impl OutputChannel {
 pub struct Config {
     pub rc: RcInputConfig,
     pub attitude_controller: CascadeAttitudeController,
+    pub altitude_controller: TecsController,
     pub attitude_correction_gain: f32,
     pub failsafe_timeout: MicrosDurationU32,
     pub attitude_limits: AttitudeHoldLimits,
@@ -52,6 +54,7 @@ impl Default for Config {
         Self {
             rc: RcInputConfig::conventional_aetr(),
             attitude_controller: default_attitude_controller(),
+            altitude_controller: default_altitude_controller(),
             attitude_correction_gain: 0.08,
             failsafe_timeout: DEFAULT_FAILSAFE_TIMEOUT,
             attitude_limits: AttitudeHoldLimits::default(),
@@ -102,4 +105,26 @@ fn default_attitude_controller() -> CascadeAttitudeController {
     yaw.rate_pid.set_output_limits(-1.0, 1.0);
 
     CascadeAttitudeController::new(roll, pitch, yaw)
+}
+
+fn default_altitude_controller() -> TecsController {
+    let mut total_energy = PidController::new(0.004, 0.001, 0.0);
+    total_energy.set_output_limits(-0.35, 0.35);
+    total_energy.set_integral_limits(-50.0, 50.0);
+
+    let mut energy_balance = PidController::new(0.003, 0.0005, 0.0);
+    energy_balance.set_output_limits(-0.3, 0.3);
+    energy_balance.set_integral_limits(-50.0, 50.0);
+
+    TecsController::new(
+        total_energy,
+        energy_balance,
+        TecsConfig {
+            throttle_min: 0.5,
+            pitch_min_rad: -20.0f32.to_radians(),
+            pitch_max_rad: 20.0f32.to_radians(),
+            speed_weight: 0.0,
+            ..TecsConfig::default()
+        },
+    )
 }

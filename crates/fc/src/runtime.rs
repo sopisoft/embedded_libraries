@@ -7,6 +7,7 @@ use elrs::{
 };
 use fugit::MicrosDurationU32;
 use imu::{ImuEstimate, MargEstimator, MargSample};
+use tecs::{TecsController, TecsOutput, TecsState, TecsTarget};
 
 use crate::config::{Config, OUTPUT_COUNT};
 
@@ -15,6 +16,7 @@ use crate::config::{Config, OUTPUT_COUNT};
 pub enum Mode {
     Manual,
     AttitudeHold,
+    AltitudeHold,
     Failsafe,
 }
 
@@ -41,6 +43,7 @@ pub struct Output {
     pub estimate: ImuEstimate,
     pub control: FixedWingControlOutput<OUTPUT_COUNT>,
     pub gs1502_position: Gs1502Position,
+    pub altitude_target_m: Option<f32>,
 }
 
 /// CRSF, attitude estimation, failsafe, and conventional-tail control runtime.
@@ -48,10 +51,17 @@ pub struct Output {
 pub struct FlightController {
     estimator: MargEstimator,
     controller: FixedWingController<OUTPUT_COUNT>,
+    altitude_hold: AltitudeHold,
     rc: RcInputConfig,
     receiver: CrsfReceiver,
     gs1502_channel: RcChannel,
     gs1502_switch_threshold_us: u16,
+}
+
+#[derive(Debug)]
+struct AltitudeHold {
+    controller: TecsController,
+    target_m: Option<f32>,
 }
 
 #[derive(Debug)]
@@ -76,6 +86,7 @@ impl FlightController {
                 config.servo_map,
                 config.attitude_limits,
             ),
+            altitude_hold: AltitudeHold::new(config.altitude_controller),
             rc: config.rc,
             receiver: CrsfReceiver::new(config.failsafe_timeout.as_micros()),
             gs1502_channel: config.gs1502_channel,
@@ -95,10 +106,21 @@ impl FlightController {
 
     /// Runs estimation, mode selection, mixing, and pulse generation.
     pub fn update(&mut self, sample: MargSample, now_us: u32, dt: MicrosDurationU32) -> Output {
+        self.update_with_altitude(sample, None, now_us, dt)
+    }
+
+    pub fn update_with_altitude(
+        &mut self,
+        sample: MargSample,
+        barometric_altitude_m: Option<f32>,
+        now_us: u32,
+        dt: MicrosDurationU32,
+    ) -> Output {
         let estimate = self.estimator.update_marg(sample, dt);
         let pilot = self.rc.decode(&self.receiver.channels);
         if !self.rc_is_alive(now_us) {
             self.controller.attitude_hold.reset();
+            self.altitude_hold.reset();
             let pilot = failsafe_pilot();
             return Output {
                 mode: Mode::Failsafe,
@@ -106,18 +128,53 @@ impl FlightController {
                 estimate,
                 control: self.controller.update_manual(pilot),
                 gs1502_position: Gs1502Position::Retracted,
+                altitude_target_m: None,
             };
         }
-        let control = self.controller.update_selected(
-            pilot,
-            estimate.euler,
-            sample.accel_gyro.gyro_rad_s.vector() - self.estimator.gyro_bias(),
-            dt,
-        );
-        let mode = if pilot.attitude_hold_enabled {
-            Mode::AttitudeHold
+        let measured_rates = sample.accel_gyro.gyro_rad_s.vector() - self.estimator.gyro_bias();
+        let altitude = barometric_altitude_m.filter(|altitude| altitude.is_finite());
+        let (control, mode) = if pilot.attitude_hold_enabled {
+            if let Some(altitude_m) = altitude {
+                let tecs = self.altitude_hold.update(
+                    altitude_m,
+                    pilot.throttle.get(),
+                    estimate.euler.y,
+                    dt,
+                );
+                let pitch_limit = self.controller.limits.max_pitch_rad();
+                let pitch = if pitch_limit > f32::EPSILON {
+                    tecs.pitch_rad / pitch_limit
+                } else {
+                    0.0
+                };
+                let controlled_pilot = PilotCommand::new(
+                    pilot.roll.get(),
+                    pitch,
+                    pilot.yaw.get(),
+                    tecs.throttle,
+                    pilot.flaps.get(),
+                    true,
+                );
+                (
+                    self.controller.update_selected(
+                        controlled_pilot,
+                        estimate.euler,
+                        measured_rates,
+                        dt,
+                    ),
+                    Mode::AltitudeHold,
+                )
+            } else {
+                self.altitude_hold.reset();
+                (
+                    self.controller
+                        .update_selected(pilot, estimate.euler, measured_rates, dt),
+                    Mode::AttitudeHold,
+                )
+            }
         } else {
-            Mode::Manual
+            self.altitude_hold.reset();
+            (self.controller.update_manual(pilot), Mode::Manual)
         };
         Output {
             mode,
@@ -135,12 +192,51 @@ impl FlightController {
             } else {
                 Gs1502Position::Retracted
             },
+            altitude_target_m: self.altitude_hold.target_m,
         }
     }
 
     /// Returns the most recently decoded channels.
     pub const fn channels(&self) -> &RcChannels {
         &self.receiver.channels
+    }
+}
+
+impl AltitudeHold {
+    const fn new(controller: TecsController) -> Self {
+        Self {
+            controller,
+            target_m: None,
+        }
+    }
+
+    fn update(
+        &mut self,
+        altitude_m: f32,
+        throttle_trim: f32,
+        pitch_trim_rad: f32,
+        dt: MicrosDurationU32,
+    ) -> TecsOutput {
+        let target_m = *self.target_m.get_or_insert_with(|| {
+            let mut config = self.controller.config();
+            config.throttle_trim = throttle_trim;
+            config.pitch_trim_rad =
+                pitch_trim_rad.clamp(config.pitch_min_rad, config.pitch_max_rad);
+            self.controller.set_config(config);
+            self.controller.reset();
+            altitude_m
+        });
+        self.controller.update(
+            TecsTarget::new(target_m, 0.0),
+            TecsState::new(altitude_m, 0.0),
+            dt,
+        )
+    }
+
+    fn reset(&mut self) {
+        if self.target_m.take().is_some() {
+            self.controller.reset();
+        }
     }
 }
 
@@ -155,7 +251,10 @@ impl CrsfReceiver {
     }
 
     fn push(&mut self, byte: u8, now_us: u32) -> bool {
-        let Some(Ok(frame)) = self.parser.push(byte) else {
+        let Some(result) = self.parser.push(byte) else {
+            return false;
+        };
+        let Ok(frame) = result else {
             return false;
         };
         let updated = match frame.frame_type {
@@ -195,5 +294,5 @@ fn neutral_channels() -> RcChannels {
 }
 
 fn failsafe_pilot() -> PilotCommand {
-    PilotCommand::new(0.0, 0.0, 0.0, 0.0, 0.0, false)
+    PilotCommand::new(0.0, 0.0, 0.0, 0.5, 0.0, false)
 }

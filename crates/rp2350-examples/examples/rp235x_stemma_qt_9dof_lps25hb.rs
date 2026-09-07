@@ -108,35 +108,6 @@ mod embedded_example {
         let baro_scl_pin = pins.gpio19.into_pull_up_input();
         let mut ready_led = pins.gpio25.into_push_pull_output();
         let _ = ready_led.set_low();
-        let mut gpio_in = hal::Sio::read_bank0();
-        defmt::info!(
-            "imu gpio16_sda_high={:?} gpio17_scl_high={:?}",
-            ((gpio_in >> 16) & 1) != 0,
-            ((gpio_in >> 17) & 1) != 0
-        );
-        defmt::info!("attempt imu i2c0 bus recovery");
-        let mut imu_scl_recovery =
-            imu_scl_pin.into_push_pull_output_in_state(hal::gpio::PinState::High);
-        for _ in 0..16 {
-            let _ = imu_scl_recovery.set_low();
-            for _ in 0..1024 {
-                core::hint::spin_loop();
-            }
-            let _ = imu_scl_recovery.set_high();
-            for _ in 0..1024 {
-                core::hint::spin_loop();
-            }
-            gpio_in = hal::Sio::read_bank0();
-            if ((gpio_in >> 16) & 1) != 0 {
-                break;
-            }
-        }
-        defmt::info!(
-            "imu recovery result: gpio16_sda_high={:?} gpio17_scl_high={:?}",
-            ((gpio_in >> 16) & 1) != 0,
-            ((gpio_in >> 17) & 1) != 0
-        );
-        let imu_scl_pin = imu_scl_recovery.into_pull_up_input();
 
         let imu_i2c = hal::i2c::I2C::i2c0(
             pac.I2C0,
@@ -146,36 +117,6 @@ mod embedded_example {
             &mut pac.RESETS,
             clocks.system_clock.freq(),
         );
-
-        gpio_in = hal::Sio::read_bank0();
-        defmt::info!(
-            "baro gpio18_sda_high={:?} gpio19_scl_high={:?}",
-            ((gpio_in >> 18) & 1) != 0,
-            ((gpio_in >> 19) & 1) != 0
-        );
-        defmt::info!("attempt baro i2c1 bus recovery");
-        let mut baro_scl_recovery =
-            baro_scl_pin.into_push_pull_output_in_state(hal::gpio::PinState::High);
-        for _ in 0..16 {
-            let _ = baro_scl_recovery.set_low();
-            for _ in 0..1024 {
-                core::hint::spin_loop();
-            }
-            let _ = baro_scl_recovery.set_high();
-            for _ in 0..1024 {
-                core::hint::spin_loop();
-            }
-            gpio_in = hal::Sio::read_bank0();
-            if ((gpio_in >> 18) & 1) != 0 {
-                break;
-            }
-        }
-        defmt::info!(
-            "baro recovery result: gpio18_sda_high={:?} gpio19_scl_high={:?}",
-            ((gpio_in >> 18) & 1) != 0,
-            ((gpio_in >> 19) & 1) != 0
-        );
-        let baro_scl_pin = baro_scl_recovery.into_pull_up_input();
 
         let baro_i2c = hal::i2c::I2C::i2c1(
             pac.I2C1,

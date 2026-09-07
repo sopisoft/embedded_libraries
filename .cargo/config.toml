@@ -17,6 +17,8 @@ runner = [
   "--disable-progressbars",
   "--chip",
   "RP235x",
+  "--protocol",
+  "swd",
   "--rtt-scan-memory",
 ]
 rustflags = [

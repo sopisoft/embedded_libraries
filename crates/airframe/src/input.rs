@@ -115,15 +115,15 @@ pub struct RcChannelMap {
 }
 
 impl RcChannelMap {
-    /// Typical AETR-style mapping with CH5 as attitude-hold and CH6 as flaps.
+    /// Typical AETR-style mapping.
     pub const fn conventional_aetr() -> Self {
         Self {
             roll: RcChannel::Ch1,
             pitch: RcChannel::Ch2,
             throttle: RcChannel::Ch3,
             yaw: RcChannel::Ch4,
-            attitude_hold: Some(RcChannel::Ch5),
-            flaps: Some(RcChannel::Ch6),
+            attitude_hold: Some(RcChannel::Ch6),
+            flaps: None,
         }
     }
 }
@@ -283,7 +283,7 @@ mod tests {
         assert!(command.roll.get() > 0.0);
         assert!(command.pitch.get() < 0.0);
         assert!(command.attitude_hold_enabled);
-        assert!(command.flaps.get() > 0.5);
+        assert_eq!(command.flaps.get(), 0.0);
     }
 
     #[test]

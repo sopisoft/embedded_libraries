@@ -75,11 +75,10 @@ mod embedded_example {
         let mut next_tick = timer.get_counter() + period;
 
         loop {
-            let raw = adc.read_raw(Channel::SingleEnded(0)).unwrap_or(0);
-            let mv = adc
-                .read_voltage_mv(Channel::SingleEnded(0), 3300)
-                .unwrap_or(0);
-            defmt::info!("CH0 raw={:?} voltage={:?} mV", raw, mv);
+            if let Ok(raw) = adc.read_raw(Channel::SingleEnded(0)) {
+                let mv = u32::from(raw) * 3300 / 4095;
+                defmt::info!("CH0 raw={:?} voltage={:?} mV", raw, mv);
+            }
             wait_until(&timer, next_tick);
             next_tick += period;
         }

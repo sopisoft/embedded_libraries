@@ -62,3 +62,23 @@ fn parser_rejects_bad_crc() {
         Err(ParseError::CrcMismatch { .. })
     ));
 }
+
+#[test]
+fn parser_resynchronizes_after_noise() {
+    let frame = Frame::new(
+        DeviceAddress::FLIGHT_CONTROLLER,
+        FRAME_TYPE_RC_CHANNELS_PACKED,
+        &[1, 2, 3],
+    )
+    .unwrap();
+    let bytes = frame.to_bytes().unwrap();
+    let mut parser = FrameParser::new();
+    for byte in [0x55, 0xAA, 0x99] {
+        parser.push(byte);
+    }
+    let mut parsed = None;
+    for &byte in &bytes {
+        parsed = parser.push(byte);
+    }
+    assert_eq!(parsed.unwrap().unwrap().payload(), &[1, 2, 3]);
+}

@@ -39,6 +39,9 @@ impl FrameParser {
 
     /// Pushes one byte into the parser.
     pub fn push(&mut self, byte: u8) -> Option<Result<Frame, ParseError>> {
+        if self.len == 0 && !is_sync_byte(byte) {
+            return None;
+        }
         if self.len >= MAX_FRAME_SIZE {
             self.reset();
         }
@@ -84,6 +87,14 @@ impl FrameParser {
         )
         .map_err(|_| ParseError::BodyTooLong)
     }
+}
+
+fn is_sync_byte(byte: u8) -> bool {
+    matches!(
+        byte,
+        0x00 | 0x0E | 0x10 | 0x12 | 0x13 | 0x14 | 0x80 | 0x90
+            ..=0x97 | 0xC0 | 0xC2 | 0xC4 | 0xC8 | 0xCC | 0xCE | 0xEA | 0xEB | 0xEC | 0xED | 0xEE
+    )
 }
 
 impl Default for FrameParser {

@@ -63,8 +63,6 @@ mod embedded_example {
             &mut pac.RESETS,
         );
 
-        defmt::info!("ELRS / CRSF RX example starting up");
-
         let crsf_pins = (pins.gpio0.into_function(), pins.gpio1.into_function());
         let crsf_uart = hal::uart::UartPeripheral::new(pac.UART0, crsf_pins, &mut pac.RESETS)
             .enable(
@@ -75,8 +73,6 @@ mod embedded_example {
 
         let mut parser = FrameParser::new();
         let mut byte = [0u8; 1];
-        let mut rx_bytes: u32 = 0;
-        let mut parsed_frames: u32 = 0;
 
         defmt::info!("ELRS / CRSF RX example ready");
 
@@ -89,18 +85,18 @@ mod embedded_example {
                 continue;
             }
 
-            rx_bytes = rx_bytes.wrapping_add(1);
             if let Some(parsed) = parser.push(byte[0]) {
                 match parsed {
                     Ok(frame) => match frame.frame_type {
                         FRAME_TYPE_RC_CHANNELS_PACKED => {
-                            let payload: [u8; 22] = frame.payload().try_into().unwrap();
+                            let Ok(payload) = frame.payload().try_into() else {
+                                continue;
+                            };
                             let channels = RcChannels::unpack(payload);
                             let ch1 = normalized_channel_01(channels.micros(0).unwrap());
                             let ch2 = normalized_channel_01(channels.micros(1).unwrap());
                             let ch3 = normalized_channel_01(channels.micros(2).unwrap());
                             let ch4 = normalized_channel_01(channels.micros(3).unwrap());
-                            parsed_frames = parsed_frames.wrapping_add(1);
                             defmt::info!(
                                 "Ch1={:?}.{:02} Ch2={:?}.{:02} Ch3={:?}.{:02} Ch4={:?}.{:02}",
                                 ch1.0,
@@ -115,7 +111,6 @@ mod embedded_example {
                         }
                         FRAME_TYPE_LINK_STATISTICS => {
                             if let Ok(stats) = LinkStatistics::decode(frame.payload()) {
-                                parsed_frames = parsed_frames.wrapping_add(1);
                                 defmt::info!(
                                     "Link: uplink={:?} downlink={:?} snr={:?}",
                                     stats.up_link_quality,
@@ -125,7 +120,6 @@ mod embedded_example {
                             }
                         }
                         other => {
-                            parsed_frames = parsed_frames.wrapping_add(1);
                             defmt::info!("Frame type {:?}", other);
                         }
                     },

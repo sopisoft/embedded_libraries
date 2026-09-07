@@ -73,9 +73,10 @@ mod embedded_example {
         loop {
             for channel_index in 0..8u8 {
                 let channel = Channel::SingleEnded(channel_index);
-                let raw = adc.read_raw(channel).unwrap_or(0);
-                let mv = adc.read_voltage_mv(channel, VREF_MV).unwrap_or(0);
-                defmt::info!("CH{:?}: raw={:?} voltage={:?} mV", channel_index, raw, mv);
+                if let Ok(raw) = adc.read_raw(channel) {
+                    let mv = u32::from(raw) * u32::from(VREF_MV) / 4095;
+                    defmt::info!("CH{:?}: raw={:?} voltage={:?} mV", channel_index, raw, mv);
+                }
             }
             wait_until(&timer, next_tick);
             next_tick += period;

@@ -82,34 +82,6 @@ mod embedded_example {
         let scl_pin = pins.gpio17.into_pull_up_input();
         let mut ready_led = pins.gpio25.into_push_pull_output();
         let _ = ready_led.set_low();
-        let mut gpio_in = hal::Sio::read_bank0();
-        defmt::info!(
-            "imu gpio16_sda_high={:?} gpio17_scl_high={:?}",
-            ((gpio_in >> 16) & 1) != 0,
-            ((gpio_in >> 17) & 1) != 0
-        );
-        defmt::info!("attempt imu i2c0 bus recovery");
-        let mut scl_recovery = scl_pin.into_push_pull_output_in_state(hal::gpio::PinState::High);
-        for _ in 0..16 {
-            let _ = scl_recovery.set_low();
-            for _ in 0..1024 {
-                core::hint::spin_loop();
-            }
-            let _ = scl_recovery.set_high();
-            for _ in 0..1024 {
-                core::hint::spin_loop();
-            }
-            gpio_in = hal::Sio::read_bank0();
-            if ((gpio_in >> 16) & 1) != 0 {
-                break;
-            }
-        }
-        defmt::info!(
-            "imu recovery result: gpio16_sda_high={:?} gpio17_scl_high={:?}",
-            ((gpio_in >> 16) & 1) != 0,
-            ((gpio_in >> 17) & 1) != 0
-        );
-        let scl_pin = scl_recovery.into_pull_up_input();
 
         let i2c = hal::i2c::I2C::i2c0(
             pac.I2C0,

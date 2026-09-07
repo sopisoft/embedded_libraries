@@ -1,5 +1,8 @@
 # PWM Examples
 
+The RP2350 examples live in the `rp2350-examples` package and run with
+`cargo rp2350 --example <name>`.
+
 - `servo_basic`: host-runnable introduction to angle-based servo control
 - `esc_basic`: host-runnable introduction to throttle-based ESC control
 - `multi_servo_airframe`: multiple-servo control surface workflow for an aircraft

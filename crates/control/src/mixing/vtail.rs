@@ -1,12 +1,12 @@
-use super::{ControlAxes, SurfaceChannel, ThrottleChannel};
+use super::{ControlAxes, Normalized, SignedNormalized, SurfaceChannel, ThrottleChannel};
 
 /// Output bundle for a V-tail aircraft.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct VTailOutputs {
-    pub left_tail: f32,
-    pub right_tail: f32,
-    pub aileron: f32,
-    pub throttle: f32,
+    pub left_tail: SignedNormalized,
+    pub right_tail: SignedNormalized,
+    pub aileron: SignedNormalized,
+    pub throttle: Normalized,
 }
 
 /// Mixer for V-tail aircraft.
@@ -31,11 +31,15 @@ impl VTailMixer {
 
     /// Mixes pitch and yaw into V-tail surfaces.
     pub fn mix(&self, axes: ControlAxes) -> VTailOutputs {
-        let pitch = axes.pitch.clamp(-1.0, 1.0);
-        let yaw = axes.yaw.clamp(-1.0, 1.0);
+        let pitch = axes.pitch.get();
+        let yaw = axes.yaw.get();
         VTailOutputs {
-            left_tail: self.left_tail.apply(pitch + yaw),
-            right_tail: self.right_tail.apply(pitch - yaw),
+            left_tail: self
+                .left_tail
+                .apply(SignedNormalized::saturated(pitch + yaw)),
+            right_tail: self
+                .right_tail
+                .apply(SignedNormalized::saturated(pitch - yaw)),
             aileron: self.aileron.apply(axes.roll),
             throttle: self.throttle.apply(axes.throttle),
         }

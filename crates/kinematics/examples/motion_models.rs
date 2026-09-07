@@ -4,17 +4,6 @@ use kinematics::{FixedWingState, MotionState2, MotionState3, coordinated_turn_ra
 use kinematics::{Pose2, Pose3, Twist2, Twist3};
 
 fn main() {
-    // This example shows three different motion models:
-    // 1. a planar robot driven by a body-frame velocity command,
-    // 2. a full 3D body driven by a body-frame twist,
-    // 3. a fixed-wing aircraft driven by airspeed, turn rate, and wind.
-    //
-    // You do not need all three in one project. Pick the model that matches
-    // your vehicle and sensor set.
-
-    // ---------------------------------------------------------------------
-    // 1) Planar motion
-    // ---------------------------------------------------------------------
     let dt_planar = MicrosDurationU32::from_millis(100);
     let mut rover = MotionState2::new(Pose2::identity());
     let rover_command = Twist2::new(Vec2::new(2.0, 0.0), 0.3);
@@ -30,11 +19,6 @@ fn main() {
         rover.pose.heading.to_degrees()
     );
 
-    // ---------------------------------------------------------------------
-    // 2) Spatial motion
-    // ---------------------------------------------------------------------
-    // This is useful when you already know the body-frame linear and angular velocity,
-    // for example from a flight controller state estimate.
     let mut body3d = MotionState3::new(Pose3::identity());
     let twist3 = Twist3::new(Vec3::new(5.0, 0.0, -0.5), Vec3::new(0.0, 0.0, 0.2));
     body3d.step_twist(twist3, MicrosDurationU32::from_secs(1));
@@ -44,14 +28,6 @@ fn main() {
         body3d.pose.position.x, body3d.pose.position.y, body3d.pose.position.z
     );
 
-    // ---------------------------------------------------------------------
-    // 3) Fixed-wing motion
-    // ---------------------------------------------------------------------
-    // For an aircraft, a common minimal model is:
-    // - current attitude,
-    // - scalar airspeed along body X,
-    // - horizontal wind estimate,
-    // - gyro turn rate for attitude propagation.
     let mut aircraft = FixedWingState::new();
     let banked_turn = Vec3::new(20.0f32.to_radians(), 0.0, 45.0f32.to_radians());
     aircraft.set_euler(banked_turn);

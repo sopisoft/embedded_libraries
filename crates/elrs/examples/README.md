@@ -2,8 +2,7 @@
 
 - `rc_frame_encode`: build a CRSF RC frame from familiar pulse-width values
 - `crsf_uart_parser`: parse a byte stream into complete CRSF frames
-- `rp235x_crsf_uart_tx`: send CRSF RC frames from an RP2350 UART
-- `rp235x_crsf_uart_rx`: receive CRSF frames on RP2350 and log decoded values with `defmt`
+- RP2350 hardware examples live in the `rp2350-examples` package.
 
 The recommended reading order is:
 first `rc_frame_encode`, then `crsf_uart_parser`, then `rp235x_crsf_uart_tx`,

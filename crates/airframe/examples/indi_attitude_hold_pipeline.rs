@@ -6,13 +6,6 @@ use indi::{IndiAttitudeConfig, IndiAttitudeController, IndiAxisConfig, IndiRateC
 use pwm::{ServoRange, ServoSet};
 
 fn main() {
-    // This example uses the same high-level airframe pipeline as the cascaded
-    // PID examples, but the attitude backend is INDI.
-    //
-    // In real firmware, the measured attitude and rates come from your AHRS.
-    // INDI works best when gyro rates are high quality and actuator response is
-    // reasonably repeatable around the current flight condition.
-
     let rc_config = RcInputConfig::conventional_aetr();
     let channels = RcChannels::from_micros([
         1_700, 1_450, 1_350, 1_520, 1_800, 1_250, 1_000, 1_000, 1_000, 1_000, 1_000, 1_000, 1_000,
@@ -54,12 +47,12 @@ fn main() {
 
     let output = controller.update_selected(
         pilot,
-        airframe::Attitude::new(
+        airframe::Vec3::new(
             10.0f32.to_radians(),
             2.0f32.to_radians(),
             30.0f32.to_radians(),
         ),
-        airframe::Vector3::new(0.15, -0.05, 0.04),
+        airframe::Vec3::new(0.15, -0.05, 0.04),
         MicrosDurationU32::from_millis(10),
     );
 
@@ -69,11 +62,11 @@ fn main() {
     );
     println!(
         "Surface commands: ailL={:.3} ailR={:.3} ele={:.3} rud={:.3} thr={:.3}",
-        output.surfaces.left_aileron,
-        output.surfaces.right_aileron,
-        output.surfaces.elevator,
-        output.surfaces.rudder,
-        output.surfaces.throttle
+        output.surfaces.left_aileron.get(),
+        output.surfaces.right_aileron.get(),
+        output.surfaces.elevator.get(),
+        output.surfaces.rudder.get(),
+        output.surfaces.throttle.get()
     );
     println!(
         "Servo pulses [us]: {:?}",

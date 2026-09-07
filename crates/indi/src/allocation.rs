@@ -15,8 +15,6 @@ pub struct ControlEffectiveness<const N: usize> {
 }
 
 impl<const N: usize> ControlEffectiveness<N> {
-    /// Creates a matrix where each column maps one actuator increment to
-    /// roll, pitch, and yaw angular acceleration.
     pub const fn new(matrix: Matrix<3, N>, regularization: f32) -> Self {
         Self {
             matrix,

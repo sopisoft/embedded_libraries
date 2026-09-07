@@ -1,11 +1,12 @@
-use control::{ControlAxes, ElevonMixer, ElevonOutputs};
+use control::{ControlAxes, ElevonMixer, ElevonOutputs, Normalized, SignedNormalized};
 use fugit::MicrosDurationU32;
-use pwm::{ServoBank, ServoSet};
+use pwm::ServoSet;
 
-use crate::{Attitude, PilotCommand, Vector3};
+use crate::{PilotCommand, Vec3};
 
 use super::{
     AttitudeHoldLimits, DefaultAttitudeController, FixedWingAttitudeBackend,
+    backend::{attitude_hold_axes, manual_axes},
     common::{ServoAssignment, apply_assignment, neutral_pulses},
 };
 
@@ -24,6 +25,10 @@ impl ElevonServoMap {
             right_elevon: ServoAssignment::symmetric(1),
             throttle: ServoAssignment::normalized(2),
         }
+    }
+
+    const fn is_valid<const N: usize>(&self) -> bool {
+        self.left_elevon.index < N && self.right_elevon.index < N && self.throttle.index < N
     }
 
     pub fn to_pulses<const N: usize>(
@@ -52,12 +57,6 @@ pub struct ElevonControlOutput<const N: usize> {
     pub pulses: [MicrosDurationU32; N],
 }
 
-impl<const N: usize> ElevonControlOutput<N> {
-    pub fn apply_to_servo_bank<E>(&self, bank: &mut ServoBank<'_, E, N>) -> Result<(), E> {
-        bank.set_pulse_widths(self.pulses)
-    }
-}
-
 /// High-level controller for elevon aircraft.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct ElevonController<const N: usize, C = DefaultAttitudeController> {
@@ -76,6 +75,7 @@ impl<const N: usize, C> ElevonController<N, C> {
         servo_map: ElevonServoMap,
         limits: AttitudeHoldLimits,
     ) -> Self {
+        assert!(servo_map.is_valid::<N>());
         Self {
             attitude_hold,
             mixer,
@@ -86,7 +86,13 @@ impl<const N: usize, C> ElevonController<N, C> {
     }
 
     pub fn update_manual(&self, pilot: PilotCommand) -> ElevonControlOutput<N> {
-        let axes = ControlAxes::new(pilot.roll, pilot.pitch, 0.0, pilot.throttle, 0.0);
+        let mut axes = manual_axes(pilot);
+        axes.yaw = SignedNormalized::ZERO;
+        axes.flaps = Normalized::ZERO;
+        self.output(axes)
+    }
+
+    fn output(&self, axes: ControlAxes) -> ElevonControlOutput<N> {
         let surfaces = self.mixer.mix(axes);
         let pulses = self.servo_map.to_pulses(surfaces, &self.servos);
         ElevonControlOutput {
@@ -99,42 +105,32 @@ impl<const N: usize, C> ElevonController<N, C> {
     pub fn update_attitude_hold(
         &mut self,
         pilot: PilotCommand,
-        measured_attitude: Attitude,
-        measured_rates_rad_s: Vector3,
+        measured_attitude: Vec3,
+        measured_rates_rad_s: Vec3,
         dt: MicrosDurationU32,
     ) -> ElevonControlOutput<N>
     where
         C: FixedWingAttitudeBackend,
     {
-        let stabilized = self.attitude_hold.update_fixed_wing(
-            pilot.roll * self.limits.max_roll_rad,
-            pilot.pitch * self.limits.max_pitch_rad,
-            0.0,
+        let mut pilot = pilot;
+        pilot.yaw = SignedNormalized::ZERO;
+        pilot.flaps = Normalized::ZERO;
+        let axes = attitude_hold_axes(
+            &mut self.attitude_hold,
+            self.limits,
+            pilot,
             measured_attitude,
             measured_rates_rad_s,
             dt,
         );
-        let axes = ControlAxes::new(
-            stabilized.actuator.x,
-            stabilized.actuator.y,
-            0.0,
-            pilot.throttle,
-            0.0,
-        );
-        let surfaces = self.mixer.mix(axes);
-        let pulses = self.servo_map.to_pulses(surfaces, &self.servos);
-        ElevonControlOutput {
-            axes,
-            surfaces,
-            pulses,
-        }
+        self.output(axes)
     }
 
     pub fn update_selected(
         &mut self,
         pilot: PilotCommand,
-        measured_attitude: Attitude,
-        measured_rates_rad_s: Vector3,
+        measured_attitude: Vec3,
+        measured_rates_rad_s: Vec3,
         dt: MicrosDurationU32,
     ) -> ElevonControlOutput<N>
     where

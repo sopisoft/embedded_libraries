@@ -6,17 +6,18 @@ members = [
   "crates/control",
   "crates/elrs",
   "crates/eskf",
+  "crates/fc",
   "crates/gs1502",
   "crates/imu",
   "crates/indi",
   "crates/kinematics",
   "crates/lis3mdl",
   "crates/lps25hb",
-  "crates/madgwick",
   "crates/mcp3208",
   "crates/mis2500",
   "crates/navigation",
   "crates/pwm",
+  "crates/rp2350-examples",
   "crates/stabilization",
   "crates/tecs",
   "crates/tsd10",
@@ -33,7 +34,7 @@ defmt = "1"
 defmt-rtt = "1"
 embedded-hal = "1.0"
 embedded-io = "0.7"
-fugit = "0.4"
+fugit = "0.5"
 heapless = "0.9"
 libm = "0.2"
 nalgebra = { version = "0.35.0", default-features = false, features = ["libm"] }

@@ -102,8 +102,6 @@ impl Config {
         }
     }
 
-    /// Close to the simple Akizuki manual setup, but still enables BDU because
-    /// it makes multi-byte reads safer.
     pub const fn akizuki_style() -> Self {
         Self {
             output_data_rate: OutputDataRate::Hz1,

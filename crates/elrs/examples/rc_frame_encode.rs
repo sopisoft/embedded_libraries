@@ -1,13 +1,6 @@
 use elrs::{DeviceAddress, RcChannels};
 
 fn main() {
-    // Many RC applications already think in microseconds:
-    // - 1000 us: low
-    // - 1500 us: center
-    // - 2000 us: high
-    //
-    // `RcChannels::from_micros()` converts those familiar values into the
-    // packed CRSF representation used by ELRS links.
     let channels = RcChannels::from_micros([
         1000, 1500, 2000, 1500, 1000, 1500, 2000, 1500, 1000, 1500, 2000, 1500, 1000, 1500, 2000,
         1500,
@@ -23,7 +16,6 @@ fn main() {
     println!("Frame type:  0x{:02X}", bytes[2]);
     println!("CRC byte:    0x{:02X}", bytes[bytes.len() - 1]);
 
-    // Round-trip decode the 22-byte RC payload so you can confirm the mapping.
     let payload: [u8; 22] = frame.payload().try_into().unwrap();
     let decoded = RcChannels::unpack(payload);
     println!(

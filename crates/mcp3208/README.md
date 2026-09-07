@@ -11,12 +11,11 @@
 ## Examples
 
 - `examples/read_voltage.rs`
-- `examples/rp235x_spi_mcp3208.rs`
-- `examples/rp235x_spi_mcp3208_scan_all.rs`
+- RP2350 hardware examples are in `rp2350-examples`
 
 Build the RP2350 examples with:
 
 ```bash
-cargo run -p mcp3208 --example rp235x_spi_mcp3208 --target thumbv8m.main-none-eabihf
-cargo build -p mcp3208 --example rp235x_spi_mcp3208_scan_all --target thumbv8m.main-none-eabihf
+cargo rp2350 --example rp235x_spi_mcp3208
+cargo rp2350 --example rp235x_spi_mcp3208_scan_all
 ```

@@ -4,15 +4,8 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
-[target.'cfg(not(all(target_arch = "arm", target_os = "none")))'.dependencies]
+[dependencies]
 eframe = "0.33"
 egui_plot = "0.34"
-glam = "0.30"
-
-[target.'thumbv8m.main-none-eabihf'.dependencies]
-defmt-rtt = { workspace = true }
-panic-probe = { workspace = true }
-
-[target.'thumbv8m.main-none-eabihf'.dependencies.rp235x-hal]
-version = "0.4"
-features = ["binary-info", "critical-section-impl", "rt"]
+glam = { workspace = true }
+serialport = { version = "4.9", default-features = false }

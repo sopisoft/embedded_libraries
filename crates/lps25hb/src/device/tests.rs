@@ -3,7 +3,6 @@ use libm::fabsf;
 
 use crate::STANDARD_SEA_LEVEL_PRESSURE_HPA;
 use crate::registers::{CTRL_REG1, PRESS_OUT_XL, RES_CONF, WHO_AM_I};
-use crate::spi::SpiBusError;
 use crate::{
     Address, Config, DEVICE_ID, Lps25hb, altitude_to_pressure_hpa, one_point_calibration_rpds,
     pressure_to_altitude_m, raw_pressure_to_hpa, raw_temperature_to_celsius,
@@ -140,9 +139,4 @@ fn altitude_helper_is_zero_at_sea_level_reference() {
         altitude_to_pressure_hpa(altitude, STANDARD_SEA_LEVEL_PRESSURE_HPA),
         STANDARD_SEA_LEVEL_PRESSURE_HPA,
     ));
-}
-
-#[test]
-fn spi_error_type_is_publicly_reachable() {
-    let _: Option<SpiBusError<(), ()>> = None;
 }

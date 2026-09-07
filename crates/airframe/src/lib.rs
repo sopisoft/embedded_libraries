@@ -9,13 +9,13 @@ pub mod fixed_wing;
 pub mod input;
 
 pub use fixed_wing::{
-    AttitudeHoldLimits, AttitudeHoldOutput, DefaultAttitudeController, ElevonControlOutput,
-    ElevonController, ElevonServoMap, FixedWingAttitudeBackend, FixedWingControlOutput,
-    FixedWingController, ServoAssignment, ServoCommandMode, ServoMap, VTailControlOutput,
-    VTailController, VTailServoMap,
+    AttitudeHoldLimits, DefaultAttitudeController, ElevonControlOutput, ElevonController,
+    ElevonServoMap, FixedWingAttitudeBackend, FixedWingControlOutput, FixedWingController,
+    ServoAssignment, ServoCommandMode, ServoMap, VTailControlOutput, VTailController,
+    VTailServoMap,
 };
+pub use glam::Vec3;
 pub use input::{
-    AxisConfig, PilotCommand, RcChannelMap, RcInputConfig, SwitchConfig, apply_subset_channels,
+    AxisConfig, PilotCommand, RcChannel, RcChannelMap, RcInputConfig, SwitchConfig,
+    apply_subset_channels,
 };
-pub type Attitude = glam::Vec3;
-pub type Vector3 = glam::Vec3;

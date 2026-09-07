@@ -8,6 +8,14 @@ const BLOCK_COUNT: usize = 4;
 const BLOCK_SIZE: usize = 3;
 const STATE_DIM: usize = BLOCK_COUNT * BLOCK_SIZE;
 
+#[derive(Copy, Clone)]
+pub(super) struct ProcessNoise {
+    pub accel: f32,
+    pub gyro: f32,
+    pub accel_bias: f32,
+    pub gyro_bias: f32,
+}
+
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Covariance {
     data: [f32; STATE_DIM * STATE_DIM],
@@ -87,14 +95,11 @@ impl Covariance {
         }
     }
 
-    pub fn predict(
+    pub(super) fn predict(
         &self,
         orientation: glam::Quat,
         accel_body: Vec3,
-        accel_noise: f32,
-        gyro_noise: f32,
-        accel_bias_noise: f32,
-        gyro_bias_noise: f32,
+        noise: ProcessNoise,
         dt: f32,
     ) -> Self {
         let rotation = rotation_matrix(orientation);
@@ -142,10 +147,10 @@ impl Covariance {
             row_block += 1;
         }
 
-        let vel_var = accel_noise * accel_noise * dt2;
-        let att_var = gyro_noise * gyro_noise * dt2;
-        let ba_var = accel_bias_noise * accel_bias_noise * dt.max(1.0e-6);
-        let bg_var = gyro_bias_noise * gyro_bias_noise * dt.max(1.0e-6);
+        let vel_var = noise.accel * noise.accel * dt2;
+        let att_var = noise.gyro * noise.gyro * dt2;
+        let ba_var = noise.accel_bias * noise.accel_bias * dt.max(1.0e-6);
+        let bg_var = noise.gyro_bias * noise.gyro_bias * dt.max(1.0e-6);
 
         propagated.set_block(0, 0, propagated.block(0, 0) + (Mat3::IDENTITY * vel_var));
         propagated.set_block(1, 1, propagated.block(1, 1) + (Mat3::IDENTITY * att_var));

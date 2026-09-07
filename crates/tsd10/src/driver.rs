@@ -84,10 +84,6 @@ where
     }
 
     /// Sends the baud-rate command described in the TSD10 manual.
-    ///
-    /// The sensor may switch UART speed immediately after this write, so this
-    /// method does not wait for the reply frame. Reconfigure the host UART
-    /// before reading again.
     pub fn set_baud_rate(&mut self, baud_rate: BaudRate) -> Result<(), Error<SERIAL::Error>> {
         self.write_command(COMMAND_ID_BAUD, baud_rate.payload_bytes())?;
         self.parser.reset();
@@ -95,9 +91,6 @@ where
     }
 
     /// Sends the baud-rate command and waits for the matching reply.
-    ///
-    /// Use this only if your transport can still receive the confirmation at
-    /// the old speed, or if you intentionally switch the host side in time.
     pub fn set_baud_rate_with_ack(
         &mut self,
         baud_rate: BaudRate,

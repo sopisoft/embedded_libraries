@@ -1,11 +1,12 @@
-use control::{ControlAxes, VTailMixer, VTailOutputs};
+use control::{ControlAxes, Normalized, VTailMixer, VTailOutputs};
 use fugit::MicrosDurationU32;
-use pwm::{ServoBank, ServoSet};
+use pwm::ServoSet;
 
-use crate::{Attitude, PilotCommand, Vector3};
+use crate::{PilotCommand, Vec3};
 
 use super::{
     AttitudeHoldLimits, DefaultAttitudeController, FixedWingAttitudeBackend,
+    backend::{attitude_hold_axes, manual_axes},
     common::{ServoAssignment, apply_assignment, neutral_pulses},
 };
 
@@ -26,6 +27,13 @@ impl VTailServoMap {
             aileron: ServoAssignment::symmetric(2),
             throttle: ServoAssignment::normalized(3),
         }
+    }
+
+    const fn is_valid<const N: usize>(&self) -> bool {
+        self.left_tail.index < N
+            && self.right_tail.index < N
+            && self.aileron.index < N
+            && self.throttle.index < N
     }
 
     pub fn to_pulses<const N: usize>(
@@ -50,12 +58,6 @@ pub struct VTailControlOutput<const N: usize> {
     pub pulses: [MicrosDurationU32; N],
 }
 
-impl<const N: usize> VTailControlOutput<N> {
-    pub fn apply_to_servo_bank<E>(&self, bank: &mut ServoBank<'_, E, N>) -> Result<(), E> {
-        bank.set_pulse_widths(self.pulses)
-    }
-}
-
 /// High-level controller for V-tail aircraft.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct VTailController<const N: usize, C = DefaultAttitudeController> {
@@ -74,6 +76,7 @@ impl<const N: usize, C> VTailController<N, C> {
         servo_map: VTailServoMap,
         limits: AttitudeHoldLimits,
     ) -> Self {
+        assert!(servo_map.is_valid::<N>());
         Self {
             attitude_hold,
             mixer,
@@ -84,7 +87,12 @@ impl<const N: usize, C> VTailController<N, C> {
     }
 
     pub fn update_manual(&self, pilot: PilotCommand) -> VTailControlOutput<N> {
-        let axes = ControlAxes::new(pilot.roll, pilot.pitch, pilot.yaw, pilot.throttle, 0.0);
+        let mut axes = manual_axes(pilot);
+        axes.flaps = Normalized::ZERO;
+        self.output(axes)
+    }
+
+    fn output(&self, axes: ControlAxes) -> VTailControlOutput<N> {
         let surfaces = self.mixer.mix(axes);
         let pulses = self.servo_map.to_pulses(surfaces, &self.servos);
         VTailControlOutput {
@@ -97,42 +105,31 @@ impl<const N: usize, C> VTailController<N, C> {
     pub fn update_attitude_hold(
         &mut self,
         pilot: PilotCommand,
-        measured_attitude: Attitude,
-        measured_rates_rad_s: Vector3,
+        measured_attitude: Vec3,
+        measured_rates_rad_s: Vec3,
         dt: MicrosDurationU32,
     ) -> VTailControlOutput<N>
     where
         C: FixedWingAttitudeBackend,
     {
-        let stabilized = self.attitude_hold.update_fixed_wing(
-            pilot.roll * self.limits.max_roll_rad,
-            pilot.pitch * self.limits.max_pitch_rad,
-            pilot.yaw * self.limits.max_yaw_rate_rad_s,
+        let mut pilot = pilot;
+        pilot.flaps = Normalized::ZERO;
+        let axes = attitude_hold_axes(
+            &mut self.attitude_hold,
+            self.limits,
+            pilot,
             measured_attitude,
             measured_rates_rad_s,
             dt,
         );
-        let axes = ControlAxes::new(
-            stabilized.actuator.x,
-            stabilized.actuator.y,
-            stabilized.actuator.z,
-            pilot.throttle,
-            0.0,
-        );
-        let surfaces = self.mixer.mix(axes);
-        let pulses = self.servo_map.to_pulses(surfaces, &self.servos);
-        VTailControlOutput {
-            axes,
-            surfaces,
-            pulses,
-        }
+        self.output(axes)
     }
 
     pub fn update_selected(
         &mut self,
         pilot: PilotCommand,
-        measured_attitude: Attitude,
-        measured_rates_rad_s: Vector3,
+        measured_attitude: Vec3,
+        measured_rates_rad_s: Vec3,
         dt: MicrosDurationU32,
     ) -> VTailControlOutput<N>
     where

@@ -5,7 +5,7 @@ use glam::{Mat3, Vec3};
 pub(crate) fn draw_reference_axes(painter: &egui::Painter, center: Pos2, scale: f32, view: Mat3) {
     for axis in [Vec3::X, Vec3::Y, Vec3::Z] {
         let tip = project(center, view, axis * scale * 0.9);
-        painter.line_segment([center, tip], Stroke::new(1.0, Color32::from_gray(90)));
+        painter.line_segment([center, tip], Stroke::new(1.0_f32, Color32::from_gray(90)));
     }
 }
 
@@ -18,7 +18,7 @@ pub(crate) fn draw_body_axis(
     label: &str,
 ) {
     let tip = project(center, Mat3::IDENTITY, axis * scale);
-    painter.line_segment([center, tip], Stroke::new(3.0, color));
+    painter.line_segment([center, tip], Stroke::new(3.0_f32, color));
     painter.circle_filled(tip, 4.0, color);
     painter.text(
         tip + Vec2::new(6.0, -6.0),
@@ -63,7 +63,7 @@ pub(crate) fn draw_body_cube(painter: &egui::Painter, center: Pos2, scale: f32, 
     for (start, end) in edges {
         painter.line_segment(
             [projected[start], projected[end]],
-            Stroke::new(2.0, Color32::from_gray(170)),
+            Stroke::new(2.0_f32, Color32::from_gray(170)),
         );
     }
 }

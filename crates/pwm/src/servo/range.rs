@@ -1,28 +1,25 @@
+use control::{Normalized, SignedNormalized};
 use embedded_hal::pwm::SetDutyCycle;
 use fugit::MicrosDurationU32;
 use libm::roundf;
 
 /// Servo timing and travel limits.
-///
 /// This type intentionally stays simple:
 /// - frame period,
 /// - minimum and maximum pulse widths,
 /// - minimum and maximum angles.
-///
-/// Trim, reverse, and endpoint tuning are expected to be handled by the radio,
-/// mixer, or the mechanical linkage.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct ServoRange {
     /// Time from one pulse to the next.
-    pub frame_period: MicrosDurationU32,
+    frame_period: MicrosDurationU32,
     /// Minimum pulse width.
-    pub min_pulse: MicrosDurationU32,
+    min_pulse: MicrosDurationU32,
     /// Maximum pulse width.
-    pub max_pulse: MicrosDurationU32,
+    max_pulse: MicrosDurationU32,
     /// Minimum mechanical angle in degrees.
-    pub min_angle_deg: f32,
+    min_angle_deg: f32,
     /// Maximum mechanical angle in degrees.
-    pub max_angle_deg: f32,
+    max_angle_deg: f32,
 }
 
 impl ServoRange {
@@ -34,6 +31,11 @@ impl ServoRange {
         min_angle_deg: f32,
         max_angle_deg: f32,
     ) -> Self {
+        assert!(frame_period.as_micros() > 0);
+        assert!(min_pulse.as_micros() < max_pulse.as_micros());
+        assert!(max_pulse.as_micros() <= frame_period.as_micros());
+        assert!(min_angle_deg.is_finite() && max_angle_deg.is_finite());
+        assert!(min_angle_deg < max_angle_deg);
         Self {
             frame_period,
             min_pulse,
@@ -43,9 +45,29 @@ impl ServoRange {
         }
     }
 
+    pub const fn frame_period(&self) -> MicrosDurationU32 {
+        self.frame_period
+    }
+
+    pub const fn min_pulse(&self) -> MicrosDurationU32 {
+        self.min_pulse
+    }
+
+    pub const fn max_pulse(&self) -> MicrosDurationU32 {
+        self.max_pulse
+    }
+
+    pub const fn min_angle_degrees(&self) -> f32 {
+        self.min_angle_deg
+    }
+
+    pub const fn max_angle_degrees(&self) -> f32 {
+        self.max_angle_deg
+    }
+
     /// Converts a normalized value in `[0, 1]` to a pulse width.
-    pub fn pulse_for_normalized(&self, position: f32) -> MicrosDurationU32 {
-        let position = position.clamp(0.0, 1.0);
+    pub fn pulse_for_normalized(&self, position: Normalized) -> MicrosDurationU32 {
+        let position = position.get();
         let min_us = self.min_pulse.as_micros() as f32;
         let max_us = self.max_pulse.as_micros() as f32;
         let pulse_us = min_us + (max_us - min_us) * position;
@@ -53,8 +75,8 @@ impl ServoRange {
     }
 
     /// Converts a symmetric value in `[-1, 1]` to a pulse width.
-    pub fn pulse_for_symmetric(&self, command: f32) -> MicrosDurationU32 {
-        let command = command.clamp(-1.0, 1.0);
+    pub fn pulse_for_symmetric(&self, command: SignedNormalized) -> MicrosDurationU32 {
+        let command = command.get();
         let center_deg = 0.5 * (self.min_angle_deg + self.max_angle_deg);
         let half_span_deg = 0.5 * (self.max_angle_deg - self.min_angle_deg);
         self.pulse_for_angle_degrees(center_deg + half_span_deg * command)
@@ -68,7 +90,7 @@ impl ServoRange {
         } else {
             (angle_deg - self.min_angle_deg) / span
         };
-        self.pulse_for_normalized(normalized)
+        self.pulse_for_normalized(Normalized::saturated(normalized))
     }
 
     /// Converts an angle in radians to a pulse width.

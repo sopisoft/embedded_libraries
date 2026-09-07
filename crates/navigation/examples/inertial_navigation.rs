@@ -8,19 +8,9 @@ fn euler_deg(q: Quat) -> Vec3 {
 }
 
 fn main() {
-    // This is the smallest useful navigation workflow in the workspace.
-    // The navigator keeps:
-    // - position,
-    // - orientation,
-    // - world-frame velocity.
-    //
-    // A common pattern is:
-    // 1. run many high-rate IMU prediction steps,
-    // 2. occasionally blend in slower external measurements.
     let mut nav = InertialNavigator::new();
     let dt = MicrosDurationU32::from_millis(20);
 
-    // Predict for one second with slight forward specific force and a small yaw rate.
     for _ in 0..50 {
         nav.predict_imu(Vec3::new(0.3, 0.0, 9.80665), Vec3::new(0.0, 0.0, 0.02), dt);
     }
@@ -34,7 +24,6 @@ fn main() {
         nav.velocity_world.x, nav.velocity_world.y, nav.velocity_world.z
     );
 
-    // Now inject slower absolute information, for example from GPS, barometer, or airspeed.
     nav.correct_position(Vec3::new(10.0, 2.0, 120.0), 0.3);
     nav.correct_velocity(Vec3::new(14.0, 0.5, -0.2), 0.4);
     nav.correct_altitude(118.5, 0.5);
@@ -51,7 +40,6 @@ fn main() {
         attitude_deg.x, attitude_deg.y, attitude_deg.z
     );
 
-    // You can also replace the orientation directly if a higher-level estimator owns it.
     nav.pose.orientation = Quat::from_euler(
         EulerRot::XYZ,
         1.0f32.to_radians(),

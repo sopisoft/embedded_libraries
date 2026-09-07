@@ -2,8 +2,7 @@
 
 //! Cascaded stabilization helpers for aircraft and other embedded vehicles.
 //!
-//! The crate focuses on the common "attitude loop outside, rate loop inside"
-//! architecture used by many flight controllers.
+//! The crate focuses on the common "attitude loop outside, rate loop inside" architecture used by many flight controllers.
 
 #[cfg(test)]
 extern crate std;
@@ -11,5 +10,4 @@ extern crate std;
 pub mod cascade;
 
 pub use cascade::{AxisErrorMode, CascadeAttitudeController, CascadeAxis, CascadeOutputs};
-pub type Attitude = glam::Vec3;
-pub type Vector3 = glam::Vec3;
+pub use glam::Vec3;

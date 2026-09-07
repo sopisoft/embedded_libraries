@@ -1,36 +1,78 @@
 //! ELRS / CRSF input decoding for fixed-wing applications.
 
-use control::shape_rc_command;
+use control::{Normalized, SignedNormalized, shape_rc_command};
 use elrs::{RcChannels, SubsetRcChannels};
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[repr(u8)]
+pub enum RcChannel {
+    Ch1,
+    Ch2,
+    Ch3,
+    Ch4,
+    Ch5,
+    Ch6,
+    Ch7,
+    Ch8,
+    Ch9,
+    Ch10,
+    Ch11,
+    Ch12,
+    Ch13,
+    Ch14,
+    Ch15,
+    Ch16,
+}
+
+impl RcChannel {
+    pub const fn index(self) -> usize {
+        self as usize
+    }
+}
 
 /// Symmetric RC axis configuration.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct AxisConfig {
-    pub min_us: u16,
-    pub center_us: u16,
-    pub max_us: u16,
-    pub deadband: f32,
-    pub expo: f32,
-    pub rate: f32,
-    pub reversed: bool,
+    min_us: u16,
+    center_us: u16,
+    max_us: u16,
+    deadband: f32,
+    expo: f32,
+    rate: f32,
+    reversed: bool,
 }
 
 impl AxisConfig {
-    /// Common `1000 / 1500 / 2000 us` symmetric axis.
-    pub const fn standard() -> Self {
+    pub const fn new(
+        min_us: u16,
+        center_us: u16,
+        max_us: u16,
+        deadband: f32,
+        expo: f32,
+        rate: f32,
+        reversed: bool,
+    ) -> Self {
+        assert!(min_us < center_us && center_us < max_us);
+        assert!(deadband.is_finite() && deadband >= 0.0 && deadband < 1.0);
+        assert!(expo.is_finite() && expo >= 0.0 && expo <= 1.0);
+        assert!(rate.is_finite() && rate >= 0.0 && rate <= 1.5);
         Self {
-            min_us: 1_000,
-            center_us: 1_500,
-            max_us: 2_000,
-            deadband: 0.03,
-            expo: 0.25,
-            rate: 1.0,
-            reversed: false,
+            min_us,
+            center_us,
+            max_us,
+            deadband,
+            expo,
+            rate,
+            reversed,
         }
     }
 
+    pub const fn standard() -> Self {
+        Self::new(1_000, 1_500, 2_000, 0.03, 0.25, 1.0, false)
+    }
+
     /// Decodes one PWM-style channel into `[-1, 1]`.
-    pub fn decode(self, pulse_us: u16) -> f32 {
+    pub fn decode(self, pulse_us: u16) -> SignedNormalized {
         let pulse_us = pulse_us.clamp(self.min_us, self.max_us);
         let mut normalized = if pulse_us >= self.center_us {
             let span = (self.max_us - self.center_us).max(1) as f32;
@@ -64,24 +106,24 @@ impl SwitchConfig {
 /// Channel assignment for a conventional fixed-wing receiver layout.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct RcChannelMap {
-    pub roll: usize,
-    pub pitch: usize,
-    pub throttle: usize,
-    pub yaw: usize,
-    pub flaps: Option<usize>,
-    pub attitude_hold: Option<usize>,
+    pub roll: RcChannel,
+    pub pitch: RcChannel,
+    pub throttle: RcChannel,
+    pub yaw: RcChannel,
+    pub flaps: Option<RcChannel>,
+    pub attitude_hold: Option<RcChannel>,
 }
 
 impl RcChannelMap {
     /// Typical AETR-style mapping with CH5 as attitude-hold and CH6 as flaps.
     pub const fn conventional_aetr() -> Self {
         Self {
-            roll: 0,
-            pitch: 1,
-            throttle: 2,
-            yaw: 3,
-            attitude_hold: Some(4),
-            flaps: Some(5),
+            roll: RcChannel::Ch1,
+            pitch: RcChannel::Ch2,
+            throttle: RcChannel::Ch3,
+            yaw: RcChannel::Ch4,
+            attitude_hold: Some(RcChannel::Ch5),
+            flaps: Some(RcChannel::Ch6),
         }
     }
 }
@@ -89,12 +131,32 @@ impl RcChannelMap {
 /// Decoded pilot command block.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct PilotCommand {
-    pub roll: f32,
-    pub pitch: f32,
-    pub yaw: f32,
-    pub throttle: f32,
-    pub flaps: f32,
+    pub roll: SignedNormalized,
+    pub pitch: SignedNormalized,
+    pub yaw: SignedNormalized,
+    pub throttle: Normalized,
+    pub flaps: Normalized,
     pub attitude_hold_enabled: bool,
+}
+
+impl PilotCommand {
+    pub const fn new(
+        roll: f32,
+        pitch: f32,
+        yaw: f32,
+        throttle: f32,
+        flaps: f32,
+        attitude_hold_enabled: bool,
+    ) -> Self {
+        Self {
+            roll: SignedNormalized::saturated(roll),
+            pitch: SignedNormalized::saturated(pitch),
+            yaw: SignedNormalized::saturated(yaw),
+            throttle: Normalized::saturated(throttle),
+            flaps: Normalized::saturated(flaps),
+            attitude_hold_enabled,
+        }
+    }
 }
 
 /// Input decoder configuration.
@@ -143,7 +205,7 @@ impl RcInputConfig {
             .map
             .flaps
             .map(|index| decode_unipolar(read_channel(channels, index, 1_000), self.flaps_reversed))
-            .unwrap_or(0.0);
+            .unwrap_or(Normalized::ZERO);
         let attitude_hold_enabled = self
             .map
             .attitude_hold
@@ -177,18 +239,19 @@ pub fn apply_subset_channels(channels: &mut RcChannels, subset: &SubsetRcChannel
     }
 }
 
-fn read_channel(channels: &RcChannels, index: usize, default_us: u16) -> u16 {
-    channels.micros(index).unwrap_or(default_us)
+fn read_channel(channels: &RcChannels, channel: RcChannel, default_us: u16) -> u16 {
+    channels.micros(channel.index()).unwrap_or(default_us)
 }
 
-fn decode_unipolar(pulse_us: u16, reversed: bool) -> f32 {
+fn decode_unipolar(pulse_us: u16, reversed: bool) -> Normalized {
     let pulse_us = pulse_us.clamp(1_000, 2_000);
     let normalized = (pulse_us - 1_000) as f32 / 1_000.0;
-    if reversed {
+    let normalized = if reversed {
         1.0 - normalized
     } else {
         normalized
-    }
+    };
+    Normalized::saturated(normalized)
 }
 
 #[cfg(test)]
@@ -199,8 +262,14 @@ mod tests {
     fn axis_decode_maps_center_to_zero() {
         let axis = AxisConfig::standard();
         assert!(axis.decode(1_500).abs() < 1.0e-6);
-        assert!(axis.decode(2_000) > 0.9);
-        assert!(axis.decode(1_000) < -0.9);
+        assert!(axis.decode(2_000).get() > 0.9);
+        assert!(axis.decode(1_000).get() < -0.9);
+    }
+
+    #[test]
+    #[should_panic]
+    fn axis_config_rejects_invalid_bounds() {
+        let _ = AxisConfig::new(2_000, 3_000, 1_000, 0.03, 0.25, 1.0, false);
     }
 
     #[test]
@@ -211,10 +280,10 @@ mod tests {
             1_000, 1_000, 1_000, 1_000,
         ]);
         let command = config.decode(&channels);
-        assert!(command.roll > 0.0);
-        assert!(command.pitch < 0.0);
+        assert!(command.roll.get() > 0.0);
+        assert!(command.pitch.get() < 0.0);
         assert!(command.attitude_hold_enabled);
-        assert!(command.flaps > 0.5);
+        assert!(command.flaps.get() > 0.5);
     }
 
     #[test]

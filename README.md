@@ -1,45 +1,26 @@
-# Embedded Libraries Workspace
+# Embedded Libraries
 
-`no_std` Rust crates for embedded sensing, estimation, RC links, and fixed-wing control.
+`no_std` Rust crates for embedded sensing, estimation, RC links, and fixed-wing control. `imu-viz` is the host-side visualization tool.
 
-The workspace is split into small crates so applications can depend only on the layers they need:
+| Area | Crates |
+| --- | --- |
+| Sensors and I/O | `elrs`, `gs1502`, `lis3mdl`, `lps25hb`, `mcp3208`, `mis2500`, `pwm`, `tsd10` |
+| Estimation and navigation | `ahrs`, `eskf`, `imu`, `kinematics`, `navigation` |
+| Control | `airframe`, `control`, `fc`, `indi`, `stabilization`, `tecs` |
+| Tools and firmware | `imu-viz`, `rp2350-examples` |
 
-- `kinematics`: motion and fixed-wing state propagation
-- `navigation`: inertial and fixed-wing dead reckoning
-- `ahrs`: common attitude-estimator traits and a complementary filter
-- `madgwick`: Madgwick AHRS filter
-- `eskf`: error-state Kalman filter
-- `gs1502`: GS-1502 linear servo PWM control
-- `indi`: simplified Incremental Nonlinear Dynamic Inversion rate control
-- `imu`: shared-bus helpers and 9-DoF estimation glue
-- `lis3mdl`: LIS3MDL driver
-- `lps25hb`: LPS25HB barometer driver for the Akizuki `AE-LPS25HB` module, with altitude helpers
-- `mis2500`: MIS-2500-015G / MIS-2500-015V analog pressure driver
-- `control`: RC shaping, PID control, and control-surface mixers
-- `stabilization`: cascaded attitude and rate control
-- `tecs`: Total Energy Control System for altitude and airspeed hold
-- `airframe`: ELRS input to actuator-command glue for conventional, elevon, and V-tail aircraft
-- `pwm`: servo and ESC PWM helpers
-- `mcp3208`: MCP3208 SPI ADC driver
-- `tsd10`: TSD10 UART LiDAR driver and frame parser
-- `elrs`: CRSF / ELRS frames, parser, RC channels, telemetry, and parameter helpers
-
-Detailed usage notes live in each crate root `README.md`.
-
-Workspace-wide checks:
+Each crate README documents its public API and hardware constraints.
 
 ```bash
 cargo fmt-check
 cargo lint
 cargo test --workspace
-cargo check --workspace --examples
-cargo doc --workspace --no-deps
+cargo rp2350-check
+cargo rp2350-clippy
 ```
 
-For RP2350 hardware examples, `cargo run` uses the `probe-rs` runner from
-`.cargo/config.toml`, so commands like this will flash and start the firmware on
-the connected board:
+Flash an RP2350 example through the configured `probe-rs` runner:
 
 ```bash
-cargo run -p mcp3208 --example rp235x_spi_mcp3208 --target thumbv8m.main-none-eabihf
+cargo rp2350 --example rp2350
 ```

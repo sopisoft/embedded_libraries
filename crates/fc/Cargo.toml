@@ -1,0 +1,17 @@
+[package]
+name = "fc"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+airframe = { path = "../airframe" }
+control = { path = "../control" }
+elrs = { path = "../elrs" }
+fugit = { workspace = true }
+imu = { path = "../imu" }
+pwm = { path = "../pwm" }
+stabilization = { path = "../stabilization" }
+
+[dev-dependencies]
+glam = { workspace = true }

@@ -22,9 +22,6 @@ impl FrameParser {
     }
 
     /// Pushes one byte from the UART stream.
-    ///
-    /// Returns `Some(Measurement)` only when the newest 4-byte window is a
-    /// valid sensor frame.
     pub fn push(&mut self, byte: u8) -> Option<Measurement> {
         if self.len < self.window.len() {
             self.window[self.len] = byte;

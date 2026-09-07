@@ -1,37 +1,43 @@
 use std::collections::VecDeque;
-use std::process::Child;
 use std::sync::mpsc::Receiver;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 use std::time::Duration;
 
 use eframe::egui;
 use glam::Mat3;
 
-use super::{AppEvent, FeatureStatus, HISTORY_LIMIT, LOG_LIMIT, LaunchConfig, Sample};
+use super::plots::PlotCache;
+use super::{AppEvent, FeatureStatus, HISTORY_LIMIT, LOG_LIMIT, PortConfig, Sample};
 
 pub(crate) struct ImuVizApp {
-    pub(crate) launch: LaunchConfig,
+    pub(crate) port: PortConfig,
     pub(crate) rx: Receiver<AppEvent>,
-    pub(crate) child: Option<Child>,
+    pub(crate) stop: Arc<AtomicBool>,
     pub(crate) samples: VecDeque<Sample>,
     pub(crate) logs: VecDeque<String>,
-    pub(crate) child_running: bool,
+    pub(crate) connected: bool,
     pub(crate) follow_attitude_plot: bool,
     pub(crate) follow_motion_plot: bool,
     pub(crate) status: FeatureStatus,
+    pub(crate) plot_cache: Option<PlotCache>,
 }
 
 impl ImuVizApp {
-    pub(crate) fn new(launch: LaunchConfig, rx: Receiver<AppEvent>, child: Child) -> Self {
+    pub(crate) fn new(port: PortConfig, rx: Receiver<AppEvent>, stop: Arc<AtomicBool>) -> Self {
         Self {
-            status: FeatureStatus::from_launch(&launch),
-            launch,
+            status: FeatureStatus::unknown(),
+            port,
             rx,
-            child: Some(child),
+            stop,
             samples: VecDeque::with_capacity(HISTORY_LIMIT),
             logs: VecDeque::with_capacity(LOG_LIMIT),
-            child_running: true,
+            connected: true,
             follow_attitude_plot: true,
             follow_motion_plot: true,
+            plot_cache: None,
         }
     }
 
@@ -46,31 +52,18 @@ impl ImuVizApp {
     pub(crate) fn poll_events(&mut self) {
         while let Ok(event) = self.rx.try_recv() {
             match event {
-                AppEvent::Log(line) => {
-                    self.status.update_from_log(&line);
-                    self.push_log(line);
-                }
-                AppEvent::Sample(sample) => {
+                AppEvent::Log(line) => self.push_log(line),
+                AppEvent::Sample(sample, status) => {
+                    self.status = status;
+                    self.plot_cache = None;
                     if self.samples.len() == HISTORY_LIMIT {
                         self.samples.pop_front();
                     }
                     self.samples.push_back(sample);
                 }
-            }
-        }
-
-        if let Some(child) = self.child.as_mut() {
-            if self.child_running {
-                match child.try_wait() {
-                    Ok(Some(status)) => {
-                        self.push_log(format!("child exited: {status}"));
-                        self.child_running = false;
-                    }
-                    Ok(None) => {}
-                    Err(error) => {
-                        self.push_log(format!("wait error: {error}"));
-                        self.child_running = false;
-                    }
+                AppEvent::Disconnected(reason) => {
+                    self.push_log(format!("disconnected: {reason}"));
+                    self.connected = false;
                 }
             }
         }
@@ -86,9 +79,7 @@ impl ImuVizApp {
 
 impl Drop for ImuVizApp {
     fn drop(&mut self) {
-        if let Some(child) = self.child.as_mut() {
-            let _ = child.kill();
-        }
+        self.stop.store(false, Ordering::Relaxed);
     }
 }
 

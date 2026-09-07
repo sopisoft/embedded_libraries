@@ -1,11 +1,3 @@
-//! SPI transport for the LPS25HB driver.
-//!
-//! This module implements the 4-wire SPI protocol described in the ST
-//! datasheet. The read/write header layout is:
-//! - bit 0: read/write
-//! - bit 1: address auto-increment for burst transfers
-//! - bit 2..=7: register address
-
 use embedded_hal::{digital::OutputPin, spi::SpiBus};
 
 use crate::interface::RegisterInterface;

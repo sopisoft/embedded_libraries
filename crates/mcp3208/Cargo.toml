@@ -6,12 +6,3 @@ license.workspace = true
 
 [dependencies]
 embedded-hal = { workspace = true }
-
-[target.'thumbv8m.main-none-eabihf'.dependencies]
-defmt = { workspace = true }
-defmt-rtt = { workspace = true }
-panic-probe = { workspace = true }
-
-[target.'thumbv8m.main-none-eabihf'.dependencies.rp235x-hal]
-version = "0.4"
-features = ["binary-info", "critical-section-impl", "rt"]

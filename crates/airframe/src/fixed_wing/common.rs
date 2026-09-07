@@ -1,3 +1,4 @@
+use control::{Normalized, SignedNormalized};
 use fugit::MicrosDurationU32;
 use pwm::ServoSet;
 
@@ -35,15 +36,20 @@ pub(crate) fn apply_assignment<const N: usize>(
     pulses: &mut [MicrosDurationU32; N],
     servos: &ServoSet<N>,
     assignment: ServoAssignment,
-    value: f32,
+    value: impl Copy + Into<f32>,
 ) {
     if assignment.index >= N {
         return;
     }
-    let range = servos.range(assignment.index);
+    let Some(range) = servos.get(assignment.index) else {
+        return;
+    };
+    let value: f32 = value.into();
     pulses[assignment.index] = match assignment.mode {
-        ServoCommandMode::Symmetric => range.pulse_for_symmetric(value),
-        ServoCommandMode::Normalized => range.pulse_for_normalized(value),
+        ServoCommandMode::Symmetric => {
+            range.pulse_for_symmetric(SignedNormalized::saturated(value))
+        }
+        ServoCommandMode::Normalized => range.pulse_for_normalized(Normalized::saturated(value)),
     };
 }
 
@@ -51,7 +57,9 @@ pub(crate) fn neutral_pulses<const N: usize>(servos: &ServoSet<N>) -> [MicrosDur
     let mut pulses = [MicrosDurationU32::from_micros(1_500); N];
     let mut i = 0;
     while i < N {
-        pulses[i] = servos.range(i).pulse_for_symmetric(0.0);
+        if let Some(range) = servos.get(i) {
+            pulses[i] = range.pulse_for_symmetric(SignedNormalized::ZERO);
+        }
         i += 1;
     }
     pulses

@@ -37,8 +37,6 @@ pub fn pressure_error_to_rpds_counts(pressure_error_hpa: f32) -> i16 {
     counts.clamp(i16::MIN as f32, i16::MAX as f32) as i16
 }
 
-/// Computes the RPDS one-point calibration value from a measured and reference
-/// pressure pair.
 pub fn one_point_calibration_rpds(measured_pressure_hpa: f32, reference_pressure_hpa: f32) -> i16 {
     pressure_error_to_rpds_counts(measured_pressure_hpa - reference_pressure_hpa)
 }

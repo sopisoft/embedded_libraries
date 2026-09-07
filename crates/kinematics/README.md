@@ -4,7 +4,6 @@ Motion-state and propagation helpers.
 
 ## What This Crate Contains
 
-- `PlanarMotion` and `SpatialMotion`
 - `MotionState2` and `MotionState3`
 - `FixedWingState`
 - `coordinated_turn_rate`

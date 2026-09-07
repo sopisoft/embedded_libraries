@@ -23,7 +23,7 @@ impl ImuVizApp {
         painter.rect_stroke(
             rect,
             8.0,
-            Stroke::new(1.0, Color32::from_gray(70)),
+            Stroke::new(1.0_f32, Color32::from_gray(70)),
             egui::StrokeKind::Inside,
         );
 
@@ -77,8 +77,7 @@ impl ImuVizApp {
 
     pub(crate) fn draw_top_panel(&mut self, ui: &mut egui::Ui) {
         ui.heading("IMU Real-Time Visualizer");
-        ui.label(format!("source: {}", self.launch.source.label()));
-        ui.label(super::parse::format_command(&self.launch.command));
+        ui.label(format!("port: {}", self.port.path));
 
         if let Some(sample) = self.current() {
             ui.horizontal_wrapped(|ui| {
@@ -107,10 +106,10 @@ impl ImuVizApp {
         }
 
         ui.horizontal_wrapped(|ui| {
-            ui.label(if self.child_running {
-                "state: running"
+            ui.label(if self.connected {
+                "state: connected"
             } else {
-                "state: stopped"
+                "state: disconnected"
             });
             ui.separator();
             ui.label(format!("samples: {}", self.samples.len()));
@@ -120,8 +119,6 @@ impl ImuVizApp {
             ui.monospace(format!("yaw: {}", self.status.yaw.label()));
             ui.separator();
             ui.monospace(format!("mag: {}", self.status.magnetometer.label()));
-            ui.separator();
-            ui.monospace(format!("baro: {}", self.status.barometer.label()));
         });
 
         ui.horizontal_wrapped(|ui| {

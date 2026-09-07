@@ -1,3 +1,4 @@
+use control::SignedNormalized;
 use fugit::MicrosDurationU32;
 
 use super::ServoRange;
@@ -15,8 +16,8 @@ impl<const N: usize> ServoSet<N> {
     }
 
     /// Returns one per-channel range.
-    pub const fn range(&self, index: usize) -> ServoRange {
-        self.ranges[index]
+    pub fn get(&self, index: usize) -> Option<ServoRange> {
+        self.ranges.get(index).copied()
     }
 
     /// Converts degree commands into per-servo pulse widths.
@@ -31,7 +32,10 @@ impl<const N: usize> ServoSet<N> {
     }
 
     /// Converts symmetric commands in `[-1, 1]` into per-servo pulse widths.
-    pub fn pulse_widths_from_symmetric(&self, commands: [f32; N]) -> [MicrosDurationU32; N] {
+    pub fn pulse_widths_from_symmetric(
+        &self,
+        commands: [SignedNormalized; N],
+    ) -> [MicrosDurationU32; N] {
         let mut pulses = [MicrosDurationU32::from_micros(0); N];
         let mut i = 0;
         while i < N {

@@ -1,14 +1,14 @@
 #[cfg(feature = "cascade-pid")]
 mod cascade {
-    use crate::{Attitude, Vector3};
+    use crate::Vec3;
     use control::{ConventionalTailMixer, ElevonMixer, PidController, VTailMixer};
     use fugit::MicrosDurationU32;
     use pwm::{ServoRange, ServoSet};
     use stabilization::{AxisErrorMode, CascadeAttitudeController, CascadeAxis};
 
     use super::super::{
-        AttitudeHoldLimits, ElevonController, ElevonServoMap, FixedWingController, ServoMap,
-        VTailController, VTailServoMap,
+        AttitudeHoldLimits, ElevonController, ElevonServoMap, FixedWingController, ServoAssignment,
+        ServoMap, VTailController, VTailServoMap,
     };
     use crate::PilotCommand;
 
@@ -62,31 +62,31 @@ mod cascade {
     #[test]
     fn manual_mode_maps_throttle_as_normalized_output() {
         let controller = make_controller::<5>();
-        let output = controller.update_manual(PilotCommand {
-            roll: 0.0,
-            pitch: 0.0,
-            yaw: 0.0,
-            throttle: 1.0,
-            flaps: 0.0,
-            attitude_hold_enabled: false,
-        });
+        let output = controller.update_manual(PilotCommand::new(0.0, 0.0, 0.0, 1.0, 0.0, false));
         assert!(output.pulses[4].as_micros() >= 1_990);
+    }
+
+    #[test]
+    #[should_panic]
+    fn controller_rejects_out_of_range_servo_assignment() {
+        let mut map = ServoMap::conventional_5ch();
+        map.throttle = ServoAssignment::normalized(5);
+        let _ = FixedWingController::<5>::new(
+            CascadeAttitudeController::new(make_axis(), make_axis(), make_axis()),
+            ConventionalTailMixer::new(),
+            ServoSet::new([ServoRange::default(); 5]),
+            map,
+            AttitudeHoldLimits::default(),
+        );
     }
 
     #[test]
     fn attitude_hold_mode_generates_surface_commands() {
         let mut controller = make_controller::<5>();
         let output = controller.update_attitude_hold(
-            PilotCommand {
-                roll: 0.5,
-                pitch: 0.2,
-                yaw: 0.1,
-                throttle: 0.5,
-                flaps: 0.0,
-                attitude_hold_enabled: true,
-            },
-            Attitude::new(0.0, 0.0, 0.0),
-            Vector3::ZERO,
+            PilotCommand::new(0.5, 0.2, 0.1, 0.5, 0.0, true),
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::ZERO,
             MicrosDurationU32::from_millis(10),
         );
         assert!(output.surfaces.left_aileron.abs() > 0.0);
@@ -105,16 +105,9 @@ mod cascade {
             AttitudeHoldLimits::default(),
         );
         let output = controller.update_attitude_hold(
-            PilotCommand {
-                roll: 0.4,
-                pitch: 0.1,
-                yaw: 0.0,
-                throttle: 0.5,
-                flaps: 0.0,
-                attitude_hold_enabled: true,
-            },
-            Attitude::new(0.0, 0.0, 0.0),
-            Vector3::ZERO,
+            PilotCommand::new(0.4, 0.1, 0.0, 0.5, 0.0, true),
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::ZERO,
             MicrosDurationU32::from_millis(10),
         );
         assert_ne!(output.surfaces.left_elevon, output.surfaces.right_elevon);
@@ -132,16 +125,9 @@ mod cascade {
             AttitudeHoldLimits::default(),
         );
         let output = controller.update_attitude_hold(
-            PilotCommand {
-                roll: 0.2,
-                pitch: 0.1,
-                yaw: 0.3,
-                throttle: 0.5,
-                flaps: 0.0,
-                attitude_hold_enabled: true,
-            },
-            Attitude::new(0.0, 0.0, 0.0),
-            Vector3::ZERO,
+            PilotCommand::new(0.2, 0.1, 0.3, 0.5, 0.0, true),
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::ZERO,
             MicrosDurationU32::from_millis(10),
         );
         assert_ne!(output.surfaces.left_tail, output.surfaces.right_tail);
@@ -150,7 +136,7 @@ mod cascade {
 
 #[cfg(feature = "indi")]
 mod indi_backend {
-    use crate::{Attitude, Vector3};
+    use crate::Vec3;
     use control::ConventionalTailMixer;
     use fugit::MicrosDurationU32;
     use indi::{IndiAttitudeConfig, IndiAttitudeController, IndiAxisConfig, IndiRateController};
@@ -181,16 +167,9 @@ mod indi_backend {
     fn indi_backend_generates_surface_commands() {
         let mut controller = make_indi_controller::<5>();
         let output = controller.update_attitude_hold(
-            PilotCommand {
-                roll: 0.4,
-                pitch: -0.2,
-                yaw: 0.1,
-                throttle: 0.5,
-                flaps: 0.0,
-                attitude_hold_enabled: true,
-            },
-            Attitude::new(0.0, 0.0, 0.0),
-            Vector3::ZERO,
+            PilotCommand::new(0.4, -0.2, 0.1, 0.5, 0.0, true),
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::ZERO,
             MicrosDurationU32::from_millis(20),
         );
         assert!(output.surfaces.left_aileron.abs() > 0.0);

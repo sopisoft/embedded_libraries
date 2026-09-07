@@ -5,9 +5,6 @@ use core::cell::RefCell;
 use embedded_hal::i2c::{ErrorType, I2c, Operation};
 
 /// Shared mutable access to one I2C bus using `RefCell`.
-///
-/// This is useful when one board exposes multiple I2C devices, such as an
-/// accelerometer/gyroscope plus a separate magnetometer.
 #[derive(Copy, Clone)]
 pub struct SharedI2c<'a, BUS> {
     bus: &'a RefCell<BUS>,
@@ -21,9 +18,6 @@ impl<'a, BUS> SharedI2c<'a, BUS> {
 }
 
 /// Returns the first address whose register matches the expected ID byte.
-///
-/// This is intended for small fixed candidate sets such as alternate sensor
-/// strap addresses on breakout boards.
 pub fn find_i2c_address_by_id<BUS>(
     bus: &RefCell<BUS>,
     candidates: &[u8],
@@ -35,18 +29,15 @@ where
 {
     let mut value = [0u8; 1];
 
-    for &address in candidates {
-        if bus
-            .borrow_mut()
-            .write_read(address, &[register], &mut value)
-            .is_ok()
-            && value[0] == expected_id
-        {
-            return Some(address);
-        }
-    }
-
-    None
+    candidates
+        .iter()
+        .find(|&&address| {
+            bus.borrow_mut()
+                .write_read(address, &[register], &mut value)
+                .is_ok()
+                && value[0] == expected_id
+        })
+        .copied()
 }
 
 impl<BUS> ErrorType for SharedI2c<'_, BUS>

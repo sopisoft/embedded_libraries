@@ -2,8 +2,7 @@
 
 //! Control primitives for embedded vehicles.
 //!
-//! The crate provides three layers that are commonly needed between estimation
-//! and actuation:
+//! The crate provides three layers that are commonly needed between estimation and actuation:
 //!
 //! - pilot-input shaping such as deadband and expo
 //! - time-based PID control using `fugit`
@@ -19,6 +18,6 @@ pub mod pid;
 pub use input::{apply_deadband, apply_dual_rate, apply_expo, shape_rc_command};
 pub use mixing::{
     ControlAxes, ConventionalTailMixer, ConventionalTailOutputs, ElevonMixer, ElevonOutputs,
-    SurfaceChannel, ThrottleChannel, VTailMixer, VTailOutputs,
+    Normalized, SignedNormalized, SurfaceChannel, ThrottleChannel, VTailMixer, VTailOutputs,
 };
 pub use pid::PidController;

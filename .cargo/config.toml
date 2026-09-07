@@ -1,17 +1,24 @@
 [alias]
 fmt-all = "fmt --all"
 fmt-check = "fmt --all -- --check"
-lint = "clippy --workspace --all-targets --all-features -- -D warnings"
+lint = "clippy --workspace --all-targets --features airframe/indi -- -D warnings"
+rp2350 = "run -p rp2350-examples --features rp2350 --target thumbv8m.main-none-eabihf"
+rp2350-check = "check -p rp2350-examples --examples --features rp2350 --target thumbv8m.main-none-eabihf"
+rp2350-clippy = "clippy -p rp2350-examples --examples --features rp2350 --target thumbv8m.main-none-eabihf -- -D warnings"
 
 [env]
 DEFMT_LOG = "debug"
 
-[build]
-target = "thumbv8m.main-none-eabihf"
-
 [target.thumbv8m.main-none-eabihf]
 linker = "flip-link"
-runner = "scripts/cargo-runner.sh"
+runner = [
+  "probe-rs",
+  "run",
+  "--disable-progressbars",
+  "--chip",
+  "RP235x",
+  "--rtt-scan-memory",
+]
 rustflags = [
   "-C",
   "link-arg=--nmagic",

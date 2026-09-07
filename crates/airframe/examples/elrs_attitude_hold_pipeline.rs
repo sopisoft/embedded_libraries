@@ -6,21 +6,8 @@ use pwm::{ServoRange, ServoSet};
 use stabilization::{AxisErrorMode, CascadeAttitudeController, CascadeAxis};
 
 fn main() {
-    // This example shows the main benefit of the `airframe` crate:
-    // it removes boilerplate between four independent domains:
-    //
-    // 1. ELRS / CRSF receiver channels,
-    // 2. pilot input shaping and mode selection,
-    // 3. cascaded attitude hold,
-    // 4. final surface mixing and servo pulse generation.
-    //
-    // The estimator is intentionally not hard-coded here. You can feed attitude
-    // and body rates from any IMU / AHRS stack you prefer.
-
     let rc_config = RcInputConfig::conventional_aetr();
 
-    // Example ELRS packet:
-    // CH1 roll, CH2 pitch, CH3 throttle, CH4 yaw, CH5 mode switch, CH6 flaps.
     let channels = RcChannels::from_micros([
         1_700, 1_450, 1_350, 1_520, 1_800, 1_250, 1_000, 1_000, 1_000, 1_000, 1_000, 1_000, 1_000,
         1_000, 1_000, 1_000,
@@ -75,13 +62,12 @@ fn main() {
         AttitudeHoldLimits::default(),
     );
 
-    // These come from your estimator, not from the receiver.
-    let measured_attitude = airframe::Attitude::new(
+    let measured_attitude = airframe::Vec3::new(
         10.0f32.to_radians(),
         2.0f32.to_radians(),
         30.0f32.to_radians(),
     );
-    let measured_rates = airframe::Vector3::new(0.15, -0.05, 0.04);
+    let measured_rates = airframe::Vec3::new(0.15, -0.05, 0.04);
 
     let output = controller.update_selected(
         pilot,
@@ -90,20 +76,17 @@ fn main() {
         MicrosDurationU32::from_millis(10),
     );
 
-    println!("Attitude-hold enabled: {}", pilot.attitude_hold_enabled);
+    println!("Vec3-hold enabled: {}", pilot.attitude_hold_enabled);
     println!(
         "Surface commands: ailL={:.3} ailR={:.3} ele={:.3} rud={:.3} thr={:.3}",
-        output.surfaces.left_aileron,
-        output.surfaces.right_aileron,
-        output.surfaces.elevator,
-        output.surfaces.rudder,
-        output.surfaces.throttle
+        output.surfaces.left_aileron.get(),
+        output.surfaces.right_aileron.get(),
+        output.surfaces.elevator.get(),
+        output.surfaces.rudder.get(),
+        output.surfaces.throttle.get()
     );
     println!(
         "Servo pulses [us]: {:?}",
         output.pulses.map(|pulse| pulse.as_micros())
     );
-
-    // Those pulse widths can be written directly to `pwm::ServoBank` in your
-    // board-specific firmware.
 }

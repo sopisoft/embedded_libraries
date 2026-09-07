@@ -6,12 +6,6 @@ use pwm::{ServoRange, ServoSet};
 use stabilization::{AxisErrorMode, CascadeAttitudeController, CascadeAxis};
 
 fn main() {
-    // This example targets V-tail aircraft.
-    // The controller converts the same pilot command style into:
-    // - aileron output,
-    // - left/right V-tail surfaces,
-    // - throttle pulse output.
-
     let rc_config = RcInputConfig::conventional_aetr();
     let channels = RcChannels::from_micros([
         1_550, 1_600, 1_350, 1_700, 1_800, 1_000, 1_000, 1_000, 1_000, 1_000, 1_000, 1_000, 1_000,
@@ -54,17 +48,17 @@ fn main() {
 
     let output = controller.update_selected(
         pilot,
-        airframe::Attitude::new(3.0f32.to_radians(), 0.0, 15.0f32.to_radians()),
-        airframe::Vector3::new(0.05, -0.03, 0.08),
+        airframe::Vec3::new(3.0f32.to_radians(), 0.0, 15.0f32.to_radians()),
+        airframe::Vec3::new(0.05, -0.03, 0.08),
         MicrosDurationU32::from_millis(10),
     );
 
     println!(
         "V-tail: left={:.3} right={:.3} aileron={:.3} throttle={:.3}",
-        output.surfaces.left_tail,
-        output.surfaces.right_tail,
-        output.surfaces.aileron,
-        output.surfaces.throttle
+        output.surfaces.left_tail.get(),
+        output.surfaces.right_tail.get(),
+        output.surfaces.aileron.get(),
+        output.surfaces.throttle.get()
     );
     println!(
         "Pulse widths [us]: {:?}",

@@ -3,7 +3,6 @@ use glam::{Quat, Vec3};
 use super::Covariance;
 
 /// A 12-state error-state Kalman filter.
-///
 /// State error ordering:
 /// - `0..3`: velocity
 /// - `3..6`: attitude

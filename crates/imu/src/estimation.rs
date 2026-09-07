@@ -5,25 +5,24 @@ use fugit::MicrosDurationU32;
 use glam::{EulerRot, Mat3, Quat, Vec3};
 use libm::{atan2f, fabsf, sqrtf};
 
-use crate::sample::{AccelGyroSample, MargSample};
-use crate::{Attitude, Quaternion, Vector3};
+use crate::sample::{AccelGyroSample, Acceleration, AngularVelocity, MargSample};
 
 /// One fused estimate produced by [`MargEstimator`].
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct ImuEstimate {
-    pub orientation: Quaternion,
-    pub euler: Attitude,
+    pub orientation: Quat,
+    pub euler: Vec3,
     pub relative_altitude_m: f32,
     pub vertical_speed_m_s: f32,
-    pub velocity_world: Vector3,
+    pub velocity_world: Vec3,
 }
 
 /// Snapshot of the internal inertial navigator state.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct NavigatorState {
     pub relative_altitude_m: f32,
-    pub velocity_world: Vector3,
-    pub gravity_world: Vector3,
+    pub velocity_world: Vec3,
+    pub gravity_world: Vec3,
 }
 
 /// Heuristics used to slow relative-altitude drift when the IMU is stationary.
@@ -71,8 +70,6 @@ pub struct EskfTuning {
     pub mag_heading_noise_rad: f32,
     /// Velocity measurement noise used for zero-velocity updates while stationary.
     pub stationary_velocity_noise_m_s: f32,
-    /// Altitude measurement noise used for altitude hold while stationary.
-    pub stationary_altitude_noise_m: f32,
     /// Accelerometer magnitude gate for tilt corrections.
     pub accel_tilt_gate_m_s2: f32,
 }
@@ -83,7 +80,6 @@ impl Default for EskfTuning {
             accel_tilt_noise_rad: 2.0f32.to_radians(),
             mag_heading_noise_rad: 8.0f32.to_radians(),
             stationary_velocity_noise_m_s: 0.02,
-            stationary_altitude_noise_m: 0.05,
             accel_tilt_gate_m_s2: 0.8,
         }
     }
@@ -188,7 +184,7 @@ fn estimate_from_state(
 ) -> ImuEstimate {
     let (roll_rad, pitch_rad, yaw_rad) = orientation.to_euler(EulerRot::XYZ);
     ImuEstimate {
-        euler: Attitude::new(roll_rad, pitch_rad, yaw_rad),
+        euler: Vec3::new(roll_rad, pitch_rad, yaw_rad),
         orientation,
         relative_altitude_m,
         vertical_speed_m_s: velocity_world.z,
@@ -204,7 +200,7 @@ pub struct MargEstimator {
     gravity_world: Vec3,
     relative_altitude_m: f32,
     gravity_m_s2: f32,
-    correction_gain: f32,
+    attitude_correction_gain: f32,
     stationary: StationaryDetection,
     accel_bias_m_s2: Vec3,
     gyro_bias_rad_s: Vec3,
@@ -216,15 +212,15 @@ pub struct MargEstimator {
 }
 
 impl MargEstimator {
-    /// Creates an estimator with the supplied Madgwick beta.
-    pub fn new(beta: f32) -> Self {
+    /// Creates an estimator with the supplied attitude correction gain.
+    pub fn with_attitude_correction_gain(attitude_correction_gain: f32) -> Self {
         Self {
             orientation: Quat::IDENTITY,
             velocity_world: Vec3::ZERO,
             gravity_world: Vec3::new(0.0, 0.0, -9.80665),
             relative_altitude_m: 0.0,
             gravity_m_s2: 9.80665,
-            correction_gain: (2.0 * beta).max(0.0),
+            attitude_correction_gain: attitude_correction_gain.max(0.0),
             stationary: StationaryDetection::default(),
             accel_bias_m_s2: Vec3::ZERO,
             gyro_bias_rad_s: Vec3::ZERO,
@@ -243,27 +239,27 @@ impl MargEstimator {
     }
 
     /// Returns the current fused orientation.
-    pub fn orientation(&self) -> Quaternion {
+    pub fn orientation(&self) -> Quat {
         self.orientation
     }
 
     /// Returns the current gyroscope bias estimate in rad/s.
-    pub fn gyro_bias(&self) -> Vector3 {
+    pub fn gyro_bias(&self) -> Vec3 {
         self.gyro_bias_rad_s
     }
 
     /// Returns the current accelerometer bias estimate in m/s^2.
-    pub fn accel_bias(&self) -> Vector3 {
+    pub fn accel_bias(&self) -> Vec3 {
         self.accel_bias_m_s2
     }
 
     /// Sets the accelerometer bias estimate in m/s^2.
-    pub fn set_accel_bias(&mut self, accel_bias_m_s2: Vector3) {
+    pub fn set_accel_bias(&mut self, accel_bias_m_s2: Vec3) {
         self.accel_bias_m_s2 = accel_bias_m_s2;
     }
 
     /// Sets the gyroscope bias estimate in rad/s.
-    pub fn set_gyro_bias(&mut self, gyro_bias_rad_s: Vector3) {
+    pub fn set_gyro_bias(&mut self, gyro_bias_rad_s: Vec3) {
         self.gyro_bias_rad_s = gyro_bias_rad_s;
     }
 
@@ -278,12 +274,15 @@ impl MargEstimator {
 
     /// Updates the estimator using a full 9-DoF sample.
     pub fn update_marg(&mut self, sample: MargSample, dt: MicrosDurationU32) -> ImuEstimate {
-        let sample = self.correct_sample(sample.accel_gyro, sample.mag_body);
-        self.initialize_orientation(sample.accel_gyro.accel_m_s2, Some(sample.mag_body));
+        let sample = self.correct_sample(sample.accel_gyro, sample.mag_body.vector());
+        self.initialize_orientation(
+            sample.accel_gyro.accel_m_s2.vector(),
+            Some(sample.mag_body.vector()),
+        );
         self.update_orientation(
-            sample.accel_gyro.accel_m_s2,
-            sample.accel_gyro.gyro_rad_s,
-            Some(sample.mag_body),
+            sample.accel_gyro.accel_m_s2.vector(),
+            sample.accel_gyro.gyro_rad_s.vector(),
+            Some(sample.mag_body.vector()),
             dt,
         );
         self.integrate_linear_motion(sample.accel_gyro, dt)
@@ -292,13 +291,21 @@ impl MargEstimator {
     /// Updates the estimator using only accelerometer and gyroscope data.
     pub fn update_imu(&mut self, sample: AccelGyroSample, dt: MicrosDurationU32) -> ImuEstimate {
         let sample = self.correct_accel_gyro_sample(sample);
-        self.initialize_orientation(sample.accel_m_s2, None);
-        self.update_orientation(sample.accel_m_s2, sample.gyro_rad_s, None, dt);
+        self.initialize_orientation(sample.accel_m_s2.vector(), None);
+        self.update_orientation(
+            sample.accel_m_s2.vector(),
+            sample.gyro_rad_s.vector(),
+            None,
+            dt,
+        );
         self.integrate_linear_motion(sample, dt)
     }
 
     fn correct_sample(&mut self, sample: AccelGyroSample, mag_body: Vec3) -> MargSample {
-        MargSample::new(self.correct_accel_gyro_sample(sample), mag_body)
+        MargSample::new(
+            self.correct_accel_gyro_sample(sample),
+            crate::MagneticField::new(mag_body),
+        )
     }
 
     fn initialize_orientation(&mut self, accel_m_s2: Vec3, mag_body: Option<Vec3>) {
@@ -306,7 +313,9 @@ impl MargEstimator {
             return;
         }
 
-        let mag_norm = mag_body.map(|value| value.length()).filter(|value| *value > 1.0e-6);
+        let mag_norm = mag_body
+            .map(|value| value.length())
+            .filter(|value| *value > 1.0e-6);
         let orientation = mag_body
             .and_then(|mag_body| orientation_from_accel_and_mag(accel_m_s2, mag_body))
             .or_else(|| orientation_from_accel_and_yaw(accel_m_s2, 0.0))
@@ -367,33 +376,38 @@ impl MargEstimator {
             };
 
             if let Some(measured_orientation) = measured_orientation {
-                let alpha = (self.correction_gain * dt_s).clamp(0.0, 1.0);
-                self.orientation = self.orientation.slerp(measured_orientation, alpha).normalize();
+                let alpha = (self.attitude_correction_gain * dt_s).clamp(0.0, 1.0);
+                self.orientation = self
+                    .orientation
+                    .slerp(measured_orientation, alpha)
+                    .normalize();
             }
         }
     }
 
     fn correct_accel_gyro_sample(&mut self, sample: AccelGyroSample) -> AccelGyroSample {
-        let corrected_accel_m_s2 = sample.accel_m_s2 - self.accel_bias_m_s2;
-        let corrected_gyro_rad_s = sample.gyro_rad_s - self.gyro_bias_rad_s;
+        let accel_m_s2 = sample.accel_m_s2.vector();
+        let gyro_rad_s = sample.gyro_rad_s.vector();
+        let corrected_accel_m_s2 = accel_m_s2 - self.accel_bias_m_s2;
+        let corrected_gyro_rad_s = gyro_rad_s - self.gyro_bias_rad_s;
 
         if self.is_stationary(corrected_accel_m_s2, corrected_gyro_rad_s) {
             let gravity_body = corrected_accel_m_s2.normalize_or_zero() * self.gravity_m_s2;
-            let accel_bias_candidate = sample.accel_m_s2 - gravity_body;
+            let accel_bias_candidate = accel_m_s2 - gravity_body;
             self.accel_bias_m_s2 = self.accel_bias_m_s2.lerp(
                 accel_bias_candidate,
                 self.stationary.accel_bias_learning_gain,
             );
             self.gyro_bias_rad_s = self
                 .gyro_bias_rad_s
-                .lerp(sample.gyro_rad_s, self.stationary.gyro_bias_learning_gain);
+                .lerp(gyro_rad_s, self.stationary.gyro_bias_learning_gain);
         }
 
-        AccelGyroSample {
-            accel_m_s2: sample.accel_m_s2 - self.accel_bias_m_s2,
-            gyro_rad_s: sample.gyro_rad_s - self.gyro_bias_rad_s,
-            ..sample
-        }
+        AccelGyroSample::new(
+            Acceleration::new(accel_m_s2 - self.accel_bias_m_s2),
+            AngularVelocity::new(gyro_rad_s - self.gyro_bias_rad_s),
+            sample.temperature_c,
+        )
     }
 
     fn is_stationary(&self, accel_m_s2: Vec3, gyro_rad_s: Vec3) -> bool {
@@ -406,8 +420,8 @@ impl MargEstimator {
         dt: MicrosDurationU32,
     ) -> ImuEstimate {
         let dt_s = dt.as_secs_f32();
-        let accel_m_s2 = sample.accel_m_s2;
-        let gyro_rad_s = sample.gyro_rad_s;
+        let accel_m_s2 = sample.accel_m_s2.vector();
+        let gyro_rad_s = sample.gyro_rad_s.vector();
         let orientation = self.orientation;
 
         let accel_world = orientation.mul_vec3(accel_m_s2) + self.gravity_world;
@@ -437,8 +451,9 @@ impl MargEstimator {
             0.5 * (previous_vertical_speed_m_s + self.velocity_world.z) * dt_s;
 
         if is_stationary {
-            let reference_altitude_m =
-                *self.stationary_altitude_reference_m.get_or_insert(self.relative_altitude_m);
+            let reference_altitude_m = *self
+                .stationary_altitude_reference_m
+                .get_or_insert(self.relative_altitude_m);
             self.velocity_world = Vec3::ZERO;
             self.relative_altitude_m = self.relative_altitude_m
                 + (reference_altitude_m - self.relative_altitude_m)
@@ -495,27 +510,27 @@ impl EskfEstimator {
     }
 
     /// Returns the current fused orientation.
-    pub fn orientation(&self) -> Quaternion {
+    pub fn orientation(&self) -> Quat {
         self.filter.orientation
     }
 
     /// Returns the current gyroscope bias estimate in rad/s.
-    pub fn gyro_bias(&self) -> Vector3 {
+    pub fn gyro_bias(&self) -> Vec3 {
         self.filter.gyro_bias
     }
 
     /// Returns the current accelerometer bias estimate in m/s^2.
-    pub fn accel_bias(&self) -> Vector3 {
+    pub fn accel_bias(&self) -> Vec3 {
         self.filter.accel_bias
     }
 
     /// Sets the accelerometer bias estimate in m/s^2.
-    pub fn set_accel_bias(&mut self, accel_bias_m_s2: Vector3) {
+    pub fn set_accel_bias(&mut self, accel_bias_m_s2: Vec3) {
         self.filter.accel_bias = accel_bias_m_s2;
     }
 
     /// Sets the gyroscope bias estimate in rad/s.
-    pub fn set_gyro_bias(&mut self, gyro_bias_rad_s: Vector3) {
+    pub fn set_gyro_bias(&mut self, gyro_bias_rad_s: Vec3) {
         self.filter.gyro_bias = gyro_bias_rad_s;
     }
 
@@ -529,12 +544,12 @@ impl EskfEstimator {
     }
 
     /// Corrects the velocity state from an external measurement.
-    pub fn correct_velocity(&mut self, velocity_world: Vector3, noise_m_s: f32) {
+    pub fn correct_velocity(&mut self, velocity_world: Vec3, noise_m_s: f32) {
         self.filter.correct_velocity(velocity_world, noise_m_s);
     }
 
-    /// Corrects altitude from an external measurement.
-    pub fn correct_altitude(&mut self, altitude_m: f32, _noise_m: f32) {
+    /// Sets the relative altitude from an external measurement.
+    pub fn set_altitude(&mut self, altitude_m: f32) {
         self.relative_altitude_m = altitude_m;
     }
 
@@ -551,7 +566,7 @@ impl EskfEstimator {
 
     /// Updates the estimator using a full 9-DoF sample.
     pub fn update_marg(&mut self, sample: MargSample, dt: MicrosDurationU32) -> ImuEstimate {
-        self.update(sample.accel_gyro, Some(sample.mag_body), dt)
+        self.update(sample.accel_gyro, Some(sample.mag_body.vector()), dt)
     }
 
     fn update(
@@ -560,8 +575,8 @@ impl EskfEstimator {
         mag_body: Option<Vec3>,
         dt: MicrosDurationU32,
     ) -> ImuEstimate {
-        let accel_m_s2 = sample.accel_m_s2;
-        let gyro_rad_s = sample.gyro_rad_s;
+        let accel_m_s2 = sample.accel_m_s2.vector();
+        let gyro_rad_s = sample.gyro_rad_s.vector();
         let corrected_accel_m_s2 = accel_m_s2 - self.filter.accel_bias;
         let corrected_gyro_rad_s = gyro_rad_s - self.filter.gyro_bias;
         let dt_s = dt.as_secs_f32();
@@ -593,13 +608,14 @@ impl EskfEstimator {
         self.relative_altitude_m +=
             0.5 * (previous_vertical_speed_m_s + self.filter.velocity.z) * dt_s;
 
-        if let Some(tilt_measurement) =
-            orientation_from_accel_and_reference_heading(corrected_accel_m_s2, self.filter.orientation)
-                .or_else(|| {
-                    let (_, _, current_yaw_rad) = self.filter.orientation.to_euler(EulerRot::XYZ);
-                    orientation_from_accel_and_yaw(corrected_accel_m_s2, current_yaw_rad)
-                })
-        {
+        if let Some(tilt_measurement) = orientation_from_accel_and_reference_heading(
+            corrected_accel_m_s2,
+            self.filter.orientation,
+        )
+        .or_else(|| {
+            let (_, _, current_yaw_rad) = self.filter.orientation.to_euler(EulerRot::XYZ);
+            orientation_from_accel_and_yaw(corrected_accel_m_s2, current_yaw_rad)
+        }) {
             self.filter
                 .correct_orientation(tilt_measurement, self.tuning.accel_tilt_noise_rad);
             if !self.filter.orientation.is_finite() {
@@ -683,108 +699,20 @@ impl Default for EskfEstimator {
     }
 }
 
-/// Runtime-selectable estimator backend.
-#[derive(Debug)]
-pub enum ImuEstimator {
-    Marg(MargEstimator),
-    Eskf(EskfEstimator),
-}
-
-impl ImuEstimator {
-    /// Creates a Madgwick-backed estimator.
-    pub fn madgwick(beta: f32) -> Self {
-        Self::Marg(MargEstimator::new(beta))
-    }
-
-    /// Creates an ESKF-backed estimator.
-    pub fn eskf() -> Self {
-        Self::Eskf(EskfEstimator::new())
-    }
-
-    /// Replaces the stationary-detection parameters.
-    pub fn with_stationary_detection(self, stationary: StationaryDetection) -> Self {
-        match self {
-            Self::Marg(estimator) => Self::Marg(estimator.with_stationary_detection(stationary)),
-            Self::Eskf(estimator) => Self::Eskf(estimator.with_stationary_detection(stationary)),
-        }
-    }
-
-    /// Returns the current fused orientation.
-    pub fn orientation(&self) -> Quaternion {
-        match self {
-            Self::Marg(estimator) => estimator.orientation(),
-            Self::Eskf(estimator) => estimator.orientation(),
-        }
-    }
-
-    /// Returns the current gyroscope bias estimate in rad/s.
-    pub fn gyro_bias(&self) -> Vector3 {
-        match self {
-            Self::Marg(estimator) => estimator.gyro_bias(),
-            Self::Eskf(estimator) => estimator.gyro_bias(),
-        }
-    }
-
-    /// Returns the current accelerometer bias estimate in m/s^2.
-    pub fn accel_bias(&self) -> Vector3 {
-        match self {
-            Self::Marg(estimator) => estimator.accel_bias(),
-            Self::Eskf(estimator) => estimator.accel_bias(),
-        }
-    }
-
-    /// Sets the accelerometer bias estimate in m/s^2.
-    pub fn set_accel_bias(&mut self, accel_bias_m_s2: Vector3) {
-        match self {
-            Self::Marg(estimator) => estimator.set_accel_bias(accel_bias_m_s2),
-            Self::Eskf(estimator) => estimator.set_accel_bias(accel_bias_m_s2),
-        }
-    }
-
-    /// Sets the gyroscope bias estimate in rad/s.
-    pub fn set_gyro_bias(&mut self, gyro_bias_rad_s: Vector3) {
-        match self {
-            Self::Marg(estimator) => estimator.set_gyro_bias(gyro_bias_rad_s),
-            Self::Eskf(estimator) => estimator.set_gyro_bias(gyro_bias_rad_s),
-        }
-    }
-
-    /// Returns a snapshot of the internal navigation state.
-    pub fn navigator_state(&self) -> NavigatorState {
-        match self {
-            Self::Marg(estimator) => estimator.navigator_state(),
-            Self::Eskf(estimator) => estimator.navigator_state(),
-        }
-    }
-
-    /// Updates the estimator using a full 9-DoF sample.
-    pub fn update_marg(&mut self, sample: MargSample, dt: MicrosDurationU32) -> ImuEstimate {
-        match self {
-            Self::Marg(estimator) => estimator.update_marg(sample, dt),
-            Self::Eskf(estimator) => estimator.update_marg(sample, dt),
-        }
-    }
-
-    /// Updates the estimator using only accelerometer and gyroscope data.
-    pub fn update_imu(&mut self, sample: AccelGyroSample, dt: MicrosDurationU32) -> ImuEstimate {
-        match self {
-            Self::Marg(estimator) => estimator.update_imu(sample, dt),
-            Self::Eskf(estimator) => estimator.update_imu(sample, dt),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Vector3;
+    use crate::Vec3;
 
     #[test]
     fn stationary_sample_keeps_relative_altitude_small() {
-        let mut estimator = MargEstimator::new(0.08);
-        let sample = MargSample::new(
-            AccelGyroSample::without_temperature(Vector3::new(0.0, 0.0, 9.80665), Vector3::ZERO),
-            Vector3::X,
+        let mut estimator = MargEstimator::with_attitude_correction_gain(0.08);
+        let sample = MargSample::from_vectors(
+            AccelGyroSample::from_vectors_without_temperature(
+                Vec3::new(0.0, 0.0, 9.80665),
+                Vec3::ZERO,
+            ),
+            Vec3::X,
         );
         let mut estimate = estimator.update_marg(sample, MicrosDurationU32::from_millis(10));
         for _ in 0..199 {
@@ -799,18 +727,18 @@ mod tests {
 
     #[test]
     fn stationary_gyro_bias_learning_reduces_yaw_drift() {
-        let sample = AccelGyroSample::without_temperature(
-            Vector3::new(0.0, 0.0, 9.80665),
-            Vector3::new(0.0, 0.0, 0.02),
+        let sample = AccelGyroSample::from_vectors_without_temperature(
+            Vec3::new(0.0, 0.0, 9.80665),
+            Vec3::new(0.0, 0.0, 0.02),
         );
         let dt = MicrosDurationU32::from_millis(10);
 
-        let mut without_bias_learning =
-            MargEstimator::new(0.08).with_stationary_detection(StationaryDetection {
+        let mut without_bias_learning = MargEstimator::with_attitude_correction_gain(0.08)
+            .with_stationary_detection(StationaryDetection {
                 gyro_bias_learning_gain: 0.0,
                 ..StationaryDetection::default()
             });
-        let mut with_bias_learning = MargEstimator::new(0.08);
+        let mut with_bias_learning = MargEstimator::with_attitude_correction_gain(0.08);
 
         let mut estimate_without = without_bias_learning.update_imu(sample, dt);
         let mut estimate_with = with_bias_learning.update_imu(sample, dt);
@@ -827,10 +755,13 @@ mod tests {
 
     #[test]
     fn stationary_altitude_hold_limits_vertical_drift() {
-        let mut estimator = MargEstimator::new(0.08);
-        let sample = MargSample::new(
-            AccelGyroSample::without_temperature(Vector3::new(0.0, 0.0, 9.83), Vector3::ZERO),
-            Vector3::X,
+        let mut estimator = MargEstimator::with_attitude_correction_gain(0.08);
+        let sample = MargSample::from_vectors(
+            AccelGyroSample::from_vectors_without_temperature(
+                Vec3::new(0.0, 0.0, 9.83),
+                Vec3::ZERO,
+            ),
+            Vec3::X,
         );
         let mut estimate = estimator.update_marg(sample, MicrosDurationU32::from_millis(10));
         for _ in 0..999 {
@@ -844,16 +775,17 @@ mod tests {
     #[test]
     fn stationary_vertical_drift_stays_bounded() {
         let dt = MicrosDurationU32::from_millis(10);
-        let sample =
-            AccelGyroSample::without_temperature(Vector3::new(0.0, 0.0, 9.92), Vector3::ZERO);
+        let sample = AccelGyroSample::from_vectors_without_temperature(
+            Vec3::new(0.0, 0.0, 9.92),
+            Vec3::ZERO,
+        );
 
-        let mut estimator = MargEstimator::new(0.08).with_stationary_detection(
-            StationaryDetection {
+        let mut estimator = MargEstimator::with_attitude_correction_gain(0.08)
+            .with_stationary_detection(StationaryDetection {
                 zero_altitude_hold_gain: 0.0,
                 vertical_accel_deadband_m_s2: 0.0,
                 ..StationaryDetection::default()
-            },
-        );
+            });
         let mut estimate = estimator.update_imu(sample, dt);
         for _ in 0..999 {
             estimate = estimator.update_imu(sample, dt);
@@ -866,10 +798,12 @@ mod tests {
     #[test]
     fn stationary_horizontal_velocity_stays_bounded() {
         let dt = MicrosDurationU32::from_millis(10);
-        let sample =
-            AccelGyroSample::without_temperature(Vector3::new(0.04, -0.03, 9.80665), Vector3::ZERO);
+        let sample = AccelGyroSample::from_vectors_without_temperature(
+            Vec3::new(0.04, -0.03, 9.80665),
+            Vec3::ZERO,
+        );
 
-        let mut estimator = MargEstimator::new(0.08);
+        let mut estimator = MargEstimator::with_attitude_correction_gain(0.08);
         let mut estimate = estimator.update_imu(sample, dt);
         for _ in 0..999 {
             estimate = estimator.update_imu(sample, dt);
@@ -880,11 +814,14 @@ mod tests {
 
     #[test]
     fn magnetic_norm_gate_rejects_yaw_spikes() {
-        let mut estimator = MargEstimator::new(0.08);
+        let mut estimator = MargEstimator::with_attitude_correction_gain(0.08);
         let dt = MicrosDurationU32::from_millis(10);
-        let stable_sample = MargSample::new(
-            AccelGyroSample::without_temperature(Vector3::new(0.0, 0.0, 9.80665), Vector3::ZERO),
-            Vector3::new(1.0, 0.0, 0.0),
+        let stable_sample = MargSample::from_vectors(
+            AccelGyroSample::from_vectors_without_temperature(
+                Vec3::new(0.0, 0.0, 9.80665),
+                Vec3::ZERO,
+            ),
+            Vec3::new(1.0, 0.0, 0.0),
         );
 
         for _ in 0..200 {
@@ -892,9 +829,12 @@ mod tests {
         }
 
         let yaw_before = estimator.update_marg(stable_sample, dt).euler.z;
-        let disturbed_sample = MargSample::new(
-            AccelGyroSample::without_temperature(Vector3::new(0.0, 0.0, 9.80665), Vector3::ZERO),
-            Vector3::new(-4.0, 0.0, 0.0),
+        let disturbed_sample = MargSample::from_vectors(
+            AccelGyroSample::from_vectors_without_temperature(
+                Vec3::new(0.0, 0.0, 9.80665),
+                Vec3::ZERO,
+            ),
+            Vec3::new(-4.0, 0.0, 0.0),
         );
         let yaw_after = estimator.update_marg(disturbed_sample, dt).euler.z;
 
@@ -904,9 +844,12 @@ mod tests {
     #[test]
     fn eskf_stationary_sample_keeps_relative_altitude_small() {
         let mut estimator = EskfEstimator::new();
-        let sample = MargSample::new(
-            AccelGyroSample::without_temperature(Vector3::new(0.0, 0.0, 9.80665), Vector3::ZERO),
-            Vector3::X,
+        let sample = MargSample::from_vectors(
+            AccelGyroSample::from_vectors_without_temperature(
+                Vec3::new(0.0, 0.0, 9.80665),
+                Vec3::ZERO,
+            ),
+            Vec3::X,
         );
         let mut estimate = estimator.update_marg(sample, MicrosDurationU32::from_millis(10));
         for _ in 0..499 {
@@ -922,12 +865,12 @@ mod tests {
     #[test]
     fn eskf_magnetometer_correction_limits_yaw_drift() {
         let mut estimator = EskfEstimator::new();
-        let sample = MargSample::new(
-            AccelGyroSample::without_temperature(
-                Vector3::new(0.0, 0.0, 9.80665),
-                Vector3::new(0.0, 0.0, 0.02),
+        let sample = MargSample::from_vectors(
+            AccelGyroSample::from_vectors_without_temperature(
+                Vec3::new(0.0, 0.0, 9.80665),
+                Vec3::new(0.0, 0.0, 0.02),
             ),
-            Vector3::X,
+            Vec3::X,
         );
 
         let mut estimate = estimator.update_marg(sample, MicrosDurationU32::from_millis(10));

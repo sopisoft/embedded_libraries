@@ -1,10 +1,5 @@
 {
   "rust-analyzer.cargo.allTargets": false,
   "rust-analyzer.cargo.targetDir": true,
-  "rust-analyzer.check.overrideCommand": [
-    "./scripts/rust-analyzer-check.sh",
-    "{label}",
-    "{saved_file}"
-  ],
   "rust-analyzer.check.workspace": false
 }

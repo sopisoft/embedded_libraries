@@ -87,12 +87,6 @@ impl MotionState3 {
     }
 }
 
-/// Alias for planar motion state.
-pub type PlanarMotion = MotionState2;
-
-/// Alias for 3D motion state.
-pub type SpatialMotion = MotionState3;
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,11 +1,10 @@
 use core::convert::Infallible;
 
+use control::Normalized;
 use embedded_hal::pwm::{ErrorType, SetDutyCycle};
 use fugit::MicrosDurationU32;
 use pwm::Servo;
 
-// This example is intentionally host-runnable.
-// Replace this mock type with the PWM channel type from your HAL.
 #[derive(Debug)]
 struct MockPwmChannel {
     compare: u16,
@@ -28,12 +27,6 @@ impl SetDutyCycle for MockPwmChannel {
 }
 
 fn main() {
-    // A standard hobby servo usually expects:
-    // - one PWM period every 20 ms,
-    // - a pulse width near 1000 us for one end,
-    // - a pulse width near 2000 us for the other end.
-    //
-    // This wrapper lets you think in angles instead of duty-cycle counts.
     let pwm_channel = MockPwmChannel {
         compare: 0,
         top: 20_000,
@@ -48,13 +41,11 @@ fn main() {
         90.0,
     );
 
-    // Command the servo by angle.
     servo.set_angle_degrees(-45.0).unwrap();
     servo.set_angle_degrees(0.0).unwrap();
     servo.set_angle_degrees(60.0).unwrap();
 
-    // If your controller already produces normalized values, you can use [0, 1].
-    servo.set_normalized(0.25).unwrap();
+    servo.set_normalized(Normalized::saturated(0.25)).unwrap();
 
     let pwm_channel = servo.release();
     println!(

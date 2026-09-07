@@ -4,21 +4,19 @@ use fugit::MicrosDurationU32;
 use glam::{EulerRot, Quat, Vec3};
 use libm::{atan2f, sqrtf};
 
-use crate::traits::AttitudeEstimator;
-
 /// Complementary filter that blends integrated gyro attitude with gravity and magnetic heading.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct ComplementaryAttitudeFilter {
     orientation: Quat,
-    gain: f32,
+    correction_gain: f32,
 }
 
 impl ComplementaryAttitudeFilter {
     /// Creates a filter with a correction gain in `[0, 1]`.
-    pub const fn new(gain: f32) -> Self {
+    pub const fn with_correction_gain(correction_gain: f32) -> Self {
         Self {
             orientation: Quat::IDENTITY,
-            gain,
+            correction_gain: correction_gain.clamp(0.0, 1.0),
         }
     }
 
@@ -28,8 +26,8 @@ impl ComplementaryAttitudeFilter {
     }
 
     /// Updates the correction gain.
-    pub fn set_gain(&mut self, gain: f32) {
-        self.gain = gain.clamp(0.0, 1.0);
+    pub fn set_correction_gain(&mut self, correction_gain: f32) {
+        self.correction_gain = correction_gain.clamp(0.0, 1.0);
     }
 
     /// Updates the estimate with gyroscope, accelerometer, and magnetometer data.
@@ -55,12 +53,12 @@ impl ComplementaryAttitudeFilter {
         let yaw = atan2f(-my2, mx2);
 
         let target = Quat::from_euler(EulerRot::XYZ, roll, pitch, yaw);
-        self.orientation = self.orientation.slerp(target, self.gain).normalize();
+        self.orientation = self
+            .orientation
+            .slerp(target, self.correction_gain)
+            .normalize();
     }
-}
-
-impl AttitudeEstimator for ComplementaryAttitudeFilter {
-    fn update_imu(&mut self, gyro_rad_s: Vec3, accel: Vec3, dt: MicrosDurationU32) {
+    pub fn update_imu(&mut self, gyro_rad_s: Vec3, accel: Vec3, dt: MicrosDurationU32) {
         let dt = dt.as_secs_f32();
         self.orientation = (self.orientation * Quat::from_scaled_axis(gyro_rad_s * dt)).normalize();
 
@@ -76,10 +74,13 @@ impl AttitudeEstimator for ComplementaryAttitudeFilter {
         );
         let (_, _, yaw) = self.orientation.to_euler(EulerRot::XYZ);
         let target = Quat::from_euler(EulerRot::XYZ, roll, pitch, yaw);
-        self.orientation = self.orientation.slerp(target, self.gain).normalize();
+        self.orientation = self
+            .orientation
+            .slerp(target, self.correction_gain)
+            .normalize();
     }
 
-    fn orientation(&self) -> Quat {
+    pub const fn orientation(&self) -> Quat {
         self.orientation
     }
 }
@@ -92,7 +93,7 @@ mod tests {
 
     #[test]
     fn stationary_imu_keeps_identity() {
-        let mut filter = ComplementaryAttitudeFilter::new(0.1);
+        let mut filter = ComplementaryAttitudeFilter::with_correction_gain(0.1);
         filter.update_imu(
             Vec3::ZERO,
             Vec3::new(0.0, 0.0, 1.0),

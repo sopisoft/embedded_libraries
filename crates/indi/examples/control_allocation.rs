@@ -4,16 +4,6 @@ use indi::{ControlEffectiveness, IndiAllocator, IndiAllocatorConfig};
 use nalgebra::SMatrix;
 
 fn main() {
-    // This example allocates a desired angular acceleration across four
-    // normalized actuators:
-    //
-    // 0: left aileron
-    // 1: right aileron
-    // 2: elevator
-    // 3: rudder
-    //
-    // Each column is the angular acceleration produced by +1.0 actuator
-    // command: [roll, pitch, yaw].
     let effectiveness = ControlEffectiveness::new(
         SMatrix::<f32, 3, 4>::from_row_slice(&[
             18.0, -18.0, 0.0, 0.0, 0.0, 0.0, 15.0, 0.0, 1.0, -1.0, 0.0, 10.0,

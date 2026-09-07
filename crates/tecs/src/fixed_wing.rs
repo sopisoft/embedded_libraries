@@ -117,7 +117,6 @@ pub struct TecsOutput {
 }
 
 /// Lightweight TECS controller for altitude and airspeed hold.
-///
 /// The controller follows the standard TECS split:
 /// - throttle tracks total energy,
 /// - pitch tracks the balance between potential and kinetic energy.

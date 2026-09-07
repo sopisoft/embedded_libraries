@@ -21,12 +21,11 @@ CRSF / ExpressLRS protocol helpers for `no_std` targets.
 
 - `examples/rc_frame_encode.rs`
 - `examples/crsf_uart_parser.rs`
-- `examples/rp235x_crsf_uart_tx.rs`
-- `examples/rp235x_crsf_uart_rx.rs`
+- RP2350 hardware examples are in `rp2350-examples`
 
 Build the RP2350 examples with:
 
 ```bash
-cargo run -p elrs --example rp235x_crsf_uart_tx --target thumbv8m.main-none-eabihf
-cargo run -p elrs --example rp235x_crsf_uart_rx --target thumbv8m.main-none-eabihf
+cargo rp2350 --example rp235x_crsf_uart_tx
+cargo rp2350 --example rp235x_crsf_uart_rx
 ```

@@ -2,6 +2,7 @@ use fugit::MicrosDurationU32;
 use glam::{EulerRot, Mat3, Quat, Vec3};
 
 use super::Eskf;
+use super::covariance::ProcessNoise;
 use super::math::{outer, wrap_pi};
 
 const VELOCITY_BLOCK: usize = 0;
@@ -12,7 +13,6 @@ const BLOCK_COUNT: usize = 4;
 
 impl Eskf {
     /// Runs the prediction step with IMU measurements.
-    ///
     /// `accel_meas` is expected to be specific force.
     pub fn predict(&mut self, gyro_meas: Vec3, accel_meas: Vec3, dt: MicrosDurationU32) {
         let dt = dt.as_secs_f32();
@@ -31,10 +31,12 @@ impl Eskf {
         self.covariance = self.covariance.predict(
             self.orientation,
             accel_body,
-            self.accel_noise,
-            self.gyro_noise,
-            self.accel_bias_noise,
-            self.gyro_bias_noise,
+            ProcessNoise {
+                accel: self.accel_noise,
+                gyro: self.gyro_noise,
+                accel_bias: self.accel_bias_noise,
+                gyro_bias: self.gyro_bias_noise,
+            },
             dt,
         );
     }

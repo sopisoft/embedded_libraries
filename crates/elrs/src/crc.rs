@@ -50,17 +50,11 @@ pub type CommandCrc = Crc8<0xBA>;
 
 #[cfg(test)]
 mod tests {
-    use super::{CommandCrc, FrameCrc};
+    use super::FrameCrc;
 
     #[test]
     fn frame_crc_matches_known_example() {
         let bytes = [0x16, 0xE0, 0x03];
         assert_eq!(FrameCrc::compute(&bytes), 0xB2);
-    }
-
-    #[test]
-    fn command_crc_is_deterministic() {
-        let bytes = [0x32, 0xEC, 0xEE, 0x10, 0x01];
-        assert_eq!(CommandCrc::compute(&bytes), CommandCrc::compute(&bytes));
     }
 }

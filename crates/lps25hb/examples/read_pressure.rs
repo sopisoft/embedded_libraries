@@ -1,18 +1,3 @@
-// This example is intentionally host-runnable so a beginner can follow the
-// full flow without hardware first.
-//
-// It uses a tiny fake I2C device that exposes the same register interface as
-// the real sensor. The important part is not the mock itself, but the usage
-// pattern:
-//
-// 1. create the driver with the correct I2C address,
-// 2. initialize the sensor,
-// 3. read pressure and temperature,
-// 4. convert pressure to altitude,
-// 5. optionally compute an RPDS offset from a trusted pressure reference.
-//
-// On a real board, replace `FakeI2c` with your HAL I2C peripheral.
-
 use embedded_hal::i2c::{Error as HalError, ErrorKind, ErrorType, I2c, Operation};
 use lps25hb::{
     Address, Config, DEVICE_ID, Lps25hb, STANDARD_SEA_LEVEL_PRESSURE_HPA,
@@ -38,7 +23,7 @@ struct FakeI2c {
 }
 
 impl FakeI2c {
-    fn from_environment(pressure_hpa: f32, temperature_c: f32) -> Self {
+    fn from_values(pressure_hpa: f32, temperature_c: f32) -> Self {
         let mut regs = [0u8; 256];
         regs[WHO_AM_I as usize] = DEVICE_ID;
 
@@ -109,17 +94,12 @@ impl I2c for FakeI2c {
 }
 
 fn main() {
-    // Example environment:
-    // - pressure slightly below standard sea-level pressure
-    // - room temperature
-    let i2c = FakeI2c::from_environment(1006.8, 24.0);
+    let i2c = FakeI2c::from_values(1006.8, 24.0);
     let mut barometer = Lps25hb::new_i2c(i2c, Address::Addr5c);
 
     barometer.init(Config::default()).unwrap();
     let measurement = barometer.read_measurement().unwrap();
 
-    // If you know the local QNH or have a trusted reference station nearby,
-    // use that as the sea-level pressure. Here we use the ISA standard value.
     let altitude_m =
         pressure_to_altitude_m(measurement.pressure_hpa, STANDARD_SEA_LEVEL_PRESSURE_HPA);
 
@@ -128,8 +108,6 @@ fn main() {
     println!("  temperature : {:7.2} C", measurement.temperature_c);
     println!("  altitude    : {:7.2} m", altitude_m);
 
-    // The Akizuki appendix describes one-point calibration with the RPDS
-    // register. Imagine you trust a weather station that reports 1008.2 hPa.
     let rpds = one_point_calibration_rpds(measurement.pressure_hpa, 1008.2);
     println!("  rpds offset : {:7} counts", rpds);
 }

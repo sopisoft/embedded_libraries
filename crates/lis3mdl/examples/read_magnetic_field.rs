@@ -1,15 +1,8 @@
 use lis3mdl::{Address, Config, Lis3mdl};
 
 fn main() {
-    // This host example uses a tiny fake I2C bus so you can understand the API
-    // without owning the hardware yet.
-    //
-    // On real hardware you would replace `MockI2c` with the I2C peripheral from
-    // your HAL and keep the driver calls exactly the same.
     let mut i2c = MockI2c::new();
 
-    // Pretend the sensor already contains one sample:
-    // X = 2281 counts, Y = 0, Z = -2281 counts.
     i2c.set_reg(0x28, 0xE9);
     i2c.set_reg(0x29, 0x08);
     i2c.set_reg(0x2A, 0x00);
@@ -28,9 +21,6 @@ fn main() {
         "Field [mGauss]: x={:.1} y={:.1} z={:.1}",
         field.x_mgauss, field.y_mgauss, field.z_mgauss
     );
-
-    // In a real AHRS pipeline you would usually convert those values into the
-    // vector type used by your estimator and feed them into a fusion filter.
 }
 
 use core::convert::Infallible;

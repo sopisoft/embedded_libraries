@@ -1,44 +1,13 @@
 # pwm
 
-PWM helpers for hobby servos and ESCs.
+PWM conversion for hobby servos and ESCs.
 
-## What This Crate Contains
+- `ServoRange` defines pulse and angle limits.
+- `Servo` drives one PWM output.
+- `ServoSet` converts commands for a configured group of channels.
+- `ServoBank` writes pulse widths to heterogeneous HAL outputs.
+- `Esc` exposes normalized throttle without servo-angle configuration.
 
-- `ServoRange`: pulse and angle limits for one servo class
-- `ServoSet`: per-channel servo ranges for shared conversions
-- `Servo`: one PWM-backed servo output
-- `ServoBank`: heterogeneous multi-servo helper for HAL-specific code
-- `Esc`: normalized throttle output for electronic speed controllers
+Normalized commands use bounded `control` types. Radio trim, reversing, and linkage geometry remain outside this crate.
 
-## Design Note
-
-The crate keeps servo configuration intentionally small.
-
-It handles:
-
-- frame period
-- pulse limits
-- angle limits
-
-It does not handle:
-
-- radio trim
-- servo reversing
-- endpoint tuning beyond the explicit configured range
-
-Those are better handled in the transmitter, mixer, or linkage geometry.
-
-## Examples
-
-- `examples/servo_basic.rs`
-- `examples/esc_basic.rs`
-- `examples/multi_servo_airframe.rs`
-- `examples/rp235x_servo_pico2.rs`
-- `examples/rp235x_four_servo_pico2.rs`
-
-Build the RP2350 examples with:
-
-```bash
-cargo run -p pwm --example rp235x_servo_pico2 --target thumbv8m.main-none-eabihf
-cargo run -p pwm --example rp235x_four_servo_pico2 --target thumbv8m.main-none-eabihf
-```
+Host examples cover one servo, one ESC, and a multi-servo airframe. Hardware examples are in [`rp2350-examples`](../rp2350-examples/README.md).

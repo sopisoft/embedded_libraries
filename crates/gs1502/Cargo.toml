@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+control = { path = "../control" }
 embedded-hal = { workspace = true }
 fugit = { workspace = true }
 pwm = { path = "../pwm" }

@@ -10,5 +10,5 @@ pub mod state;
 pub mod types;
 
 pub use fixed_wing::{FixedWingState, coordinated_turn_rate};
-pub use state::{MotionState2, MotionState3, PlanarMotion, SpatialMotion};
+pub use state::{MotionState2, MotionState3};
 pub use types::{Pose2, Pose3, Twist2, Twist3};

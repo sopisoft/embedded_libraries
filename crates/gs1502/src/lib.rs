@@ -3,9 +3,10 @@
 #[cfg(test)]
 extern crate std;
 
+use control::Normalized;
 use embedded_hal::pwm::SetDutyCycle;
 use fugit::MicrosDurationU32;
-use pwm::{Servo, ServoOutput, ServoRange};
+use pwm::{Servo, ServoRange};
 
 /// GS-1502 PWM frame period.
 pub const FRAME_PERIOD_US: u32 = 20_000;
@@ -55,47 +56,13 @@ impl<PWM> Gs1502<PWM> {
 
 impl<PWM: SetDutyCycle> Gs1502<PWM> {
     /// Sets the actuator position as a normalized value in `[0, 1]`.
-    pub fn set_position(&mut self, position: f32) -> Result<(), PWM::Error> {
+    pub fn set_position(&mut self, position: Normalized) -> Result<(), PWM::Error> {
         self.servo.set_normalized(position)
     }
 
     /// Sets the actuator position in millimeters from one end of the stroke.
     pub fn set_stroke_mm(&mut self, position_mm: f32) -> Result<(), PWM::Error> {
-        self.set_position(position_mm / STROKE_MM)
-    }
-
-    /// Sets a centered command in `[-1, 1]`.
-    pub fn set_symmetric(&mut self, command: f32) -> Result<(), PWM::Error> {
-        self.servo.set_symmetric(command)
-    }
-
-    /// Writes a raw pulse width.
-    pub fn set_pulse_width(&mut self, pulse: MicrosDurationU32) -> Result<(), PWM::Error> {
-        self.servo.set_pulse_width(pulse)
-    }
-}
-
-impl<PWM: SetDutyCycle> ServoOutput for Gs1502<PWM> {
-    type Error = PWM::Error;
-
-    fn set_normalized(&mut self, position: f32) -> Result<(), Self::Error> {
-        self.set_position(position)
-    }
-
-    fn set_symmetric(&mut self, command: f32) -> Result<(), Self::Error> {
-        self.set_symmetric(command)
-    }
-
-    fn set_angle_degrees(&mut self, angle_deg: f32) -> Result<(), Self::Error> {
-        self.servo.set_angle_degrees(angle_deg)
-    }
-
-    fn set_angle_radians(&mut self, angle_rad: f32) -> Result<(), Self::Error> {
-        self.servo.set_angle_radians(angle_rad)
-    }
-
-    fn set_pulse_width(&mut self, pulse: MicrosDurationU32) -> Result<(), Self::Error> {
-        self.set_pulse_width(pulse)
+        self.set_position(Normalized::saturated(position_mm / STROKE_MM))
     }
 }
 
@@ -128,7 +95,7 @@ mod tests {
     }
 
     #[test]
-    fn stroke_maps_to_default_endpoints() {
+    fn stroke_midpoint_maps_to_center_pulse() {
         let mut servo = Gs1502::new(MockPwm { duty: 0 });
         servo.set_stroke_mm(3.5).unwrap();
         assert_eq!(servo.release().duty, 1_500);

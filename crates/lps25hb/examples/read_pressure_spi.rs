@@ -1,16 +1,9 @@
-// This host-runnable example mirrors the I2C getting-started example, but it
-// uses the SPI transport wrapper instead.
-//
-// This is useful when your target board already has a spare SPI bus and you
-// want to keep the I2C bus free for IMUs, magnetometers, or other sensors.
-//
 // On real hardware:
 // - connect SPC to your SPI clock
 // - connect SDI to your MOSI
 // - connect SDO to your MISO
 // - connect CS to a GPIO chip-select pin
-// - keep the Akizuki module in SPI mode and do not use the I2C pull-up
-//   jumpers for the SPI bus
+// - keep the Akizuki module in SPI mode and do not use the I2C pull-up jumpers for the SPI bus
 
 use core::convert::Infallible;
 
@@ -34,7 +27,7 @@ struct FakeSpi {
 }
 
 impl FakeSpi {
-    fn from_environment(pressure_hpa: f32, temperature_c: f32) -> Self {
+    fn from_values(pressure_hpa: f32, temperature_c: f32) -> Self {
         let mut regs = [0u8; 256];
         regs[WHO_AM_I as usize] = DEVICE_ID;
 
@@ -141,7 +134,7 @@ impl OutputPin for FakeCs {
 }
 
 fn main() {
-    let spi = FakeSpi::from_environment(1008.4, 23.5);
+    let spi = FakeSpi::from_values(1008.4, 23.5);
     let cs = FakeCs;
     let mut barometer = Lps25hb::new_spi(spi, cs);
 

@@ -40,12 +40,11 @@ The Akizuki appendix notes that a shipped module can have a pressure offset of a
 
 - `examples/read_pressure.rs`
 - `examples/read_pressure_spi.rs`
-- `examples/rp235x_i2c_lps25hb.rs`
-- `examples/rp235x_spi_lps25hb.rs`
+- RP2350 hardware examples are in `rp2350-examples`
 
 Build the RP2350 examples with:
 
 ```bash
-cargo run -p lps25hb --example rp235x_i2c_lps25hb --target thumbv8m.main-none-eabihf
-cargo run -p lps25hb --example rp235x_spi_lps25hb --target thumbv8m.main-none-eabihf
+cargo rp2350 --example rp235x_i2c_lps25hb
+cargo rp2350 --example rp235x_spi_lps25hb
 ```

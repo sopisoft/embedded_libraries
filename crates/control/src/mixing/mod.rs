@@ -7,7 +7,7 @@ mod elevon;
 mod tests;
 mod vtail;
 
-pub use channels::{ControlAxes, SurfaceChannel, ThrottleChannel};
+pub use channels::{ControlAxes, Normalized, SignedNormalized, SurfaceChannel, ThrottleChannel};
 pub use conventional::{ConventionalTailMixer, ConventionalTailOutputs};
 pub use elevon::{ElevonMixer, ElevonOutputs};
 pub use vtail::{VTailMixer, VTailOutputs};

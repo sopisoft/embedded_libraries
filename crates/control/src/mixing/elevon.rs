@@ -1,11 +1,11 @@
-use super::{ControlAxes, SurfaceChannel, ThrottleChannel};
+use super::{ControlAxes, Normalized, SignedNormalized, SurfaceChannel, ThrottleChannel};
 
 /// Output bundle for an elevon delta wing.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct ElevonOutputs {
-    pub left_elevon: f32,
-    pub right_elevon: f32,
-    pub throttle: f32,
+    pub left_elevon: SignedNormalized,
+    pub right_elevon: SignedNormalized,
+    pub throttle: Normalized,
 }
 
 /// Mixer for elevon-equipped aircraft.
@@ -28,11 +28,15 @@ impl ElevonMixer {
 
     /// Mixes roll and pitch into left/right elevons.
     pub fn mix(&self, axes: ControlAxes) -> ElevonOutputs {
-        let roll = axes.roll.clamp(-1.0, 1.0);
-        let pitch = axes.pitch.clamp(-1.0, 1.0);
+        let roll = axes.roll.get();
+        let pitch = axes.pitch.get();
         ElevonOutputs {
-            left_elevon: self.left_elevon.apply(pitch + roll),
-            right_elevon: self.right_elevon.apply(pitch - roll),
+            left_elevon: self
+                .left_elevon
+                .apply(SignedNormalized::saturated(pitch + roll)),
+            right_elevon: self
+                .right_elevon
+                .apply(SignedNormalized::saturated(pitch - roll)),
             throttle: self.throttle.apply(axes.throttle),
         }
     }

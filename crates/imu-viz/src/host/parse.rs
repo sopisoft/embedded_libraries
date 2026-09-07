@@ -1,22 +1,31 @@
-use std::sync::mpsc::Sender;
+use std::sync::mpsc::SyncSender;
 
 use glam::{Quat, Vec3};
 
-use super::{AppEvent, CommandSource, LaunchConfig, Preset, Sample, StartupAction};
+use super::{AppEvent, FeatureStatus, PortConfig, Sample};
 
 pub(crate) fn parse_sample(line: &str) -> Option<Sample> {
+    if !line.starts_with("state ") {
+        return None;
+    }
     let elapsed_ms = parse_u32_after(line, "t_ms=")?;
     let quat = parse_tuple4_after(line, "quat=(")?;
-    let velocity = parse_tuple3_after(line, "velocity_m_s=(").unwrap_or([0.0, 0.0, 0.0]);
+    let velocity = parse_tuple3_after(line, "velocity_m_s=(")?;
     let altitude_m = parse_f32_after(line, "altitude_m=")?;
+    if quat.iter().any(|value| !value.is_finite())
+        || velocity.iter().any(|value| !value.is_finite())
+        || !altitude_m.is_finite()
+    {
+        return None;
+    }
     let orientation = Quat::from_xyzw(quat[1], quat[2], quat[3], quat[0]);
 
-    Some(Sample::from_quaternion_log(
+    Sample::from_quaternion_log(
         elapsed_ms,
         orientation,
         Vec3::from_array(velocity),
         altitude_m,
-    ))
+    )
 }
 
 fn parse_u32_field(field: &str) -> Option<u32> {
@@ -25,6 +34,12 @@ fn parse_u32_field(field: &str) -> Option<u32> {
 
 fn parse_f32_field(field: &str) -> Option<f32> {
     field.split_ascii_whitespace().next()?.parse().ok()
+}
+
+fn parse_tuple_value(field: &str) -> Option<f32> {
+    let mut fields = field.split_ascii_whitespace();
+    let value = fields.next()?.parse().ok()?;
+    fields.next().is_none().then_some(value)
 }
 
 fn parse_u32_after(line: &str, key: &str) -> Option<u32> {
@@ -39,182 +54,97 @@ fn parse_tuple4_after(line: &str, key: &str) -> Option<[f32; 4]> {
     let values = line.split_once(key)?.1;
     let end = values.find(')')?;
     let mut fields = values[..end].split(',');
-    Some([
-        parse_f32_field(fields.next()?)?,
-        parse_f32_field(fields.next()?)?,
-        parse_f32_field(fields.next()?)?,
-        parse_f32_field(fields.next()?)?,
-    ])
+    let values = [
+        parse_tuple_value(fields.next()?)?,
+        parse_tuple_value(fields.next()?)?,
+        parse_tuple_value(fields.next()?)?,
+        parse_tuple_value(fields.next()?)?,
+    ];
+    fields.next().is_none().then_some(values)
 }
 
 fn parse_tuple3_after(line: &str, key: &str) -> Option<[f32; 3]> {
     let values = line.split_once(key)?.1;
     let end = values.find(')')?;
     let mut fields = values[..end].split(',');
-    Some([
-        parse_f32_field(fields.next()?)?,
-        parse_f32_field(fields.next()?)?,
-        parse_f32_field(fields.next()?)?,
-    ])
+    let values = [
+        parse_tuple_value(fields.next()?)?,
+        parse_tuple_value(fields.next()?)?,
+        parse_tuple_value(fields.next()?)?,
+    ];
+    fields.next().is_none().then_some(values)
 }
 
-pub(crate) fn parse_args() -> Result<StartupAction, String> {
+pub(crate) fn parse_args() -> Result<PortConfig, String> {
     parse_args_from(std::env::args().skip(1))
 }
 
-pub(crate) fn parse_args_from<I>(args: I) -> Result<StartupAction, String>
+pub(crate) fn parse_args_from<I>(args: I) -> Result<PortConfig, String>
 where
     I: IntoIterator<Item = String>,
 {
-    let mut preset = Preset::Fusion;
-    let mut custom_command = Vec::new();
+    let mut port = None;
     let mut iter = args.into_iter();
 
     while let Some(arg) = iter.next() {
         match arg.as_str() {
-            "--mode" => {
-                let value = iter
-                    .next()
-                    .ok_or_else(|| "--mode requires `imu` or `fusion`".to_string())?;
-                preset = Preset::from_cli(&value)?;
+            "--port" => {
+                port = Some(
+                    iter.next()
+                        .ok_or_else(|| "--port requires a serial device path".to_string())?,
+                );
             }
             "--help" | "-h" => return Err(help_text()),
-            "--" => {
-                custom_command.extend(iter);
-                break;
-            }
-            _ => {
-                custom_command.push(arg);
-                custom_command.extend(iter);
-                break;
-            }
+            other => return Err(format!("unknown argument `{other}`\n\n{}", help_text())),
         }
     }
 
-    let (source, command) = if custom_command.is_empty() {
-        (CommandSource::Preset(preset), preset.command())
-    } else {
-        (CommandSource::Custom, custom_command)
-    };
-
-    Ok(StartupAction::Run(LaunchConfig { source, command }))
+    let path = port.ok_or_else(help_text)?;
+    Ok(PortConfig { path })
 }
 
 fn help_text() -> String {
     [
         "imu-viz",
-        "  --mode imu|fusion    Select a built-in firmware preset",
+        "  --port PATH          Read telemetry from a USB CDC serial device",
         "  --help               Show this help",
         "",
-        "Examples:",
-        "  cargo run -p imu-viz",
-        "  cargo run -p imu-viz -- --mode imu",
-        "  cargo run -p imu-viz -- cargo run -p imu --example rp235x_stemma_qt_9dof_lps25hb --target thumbv8m.main-none-eabihf",
+        "Example:",
+        "  cargo run -p imu-viz -- --port /dev/ttyACM0",
     ]
     .join("\n")
 }
 
-pub(crate) fn format_command(command: &[String]) -> String {
-    command
-        .iter()
-        .map(|arg| shell_escape(arg))
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
-fn shell_escape(arg: &str) -> String {
-    if arg.is_empty() {
-        return "''".to_string();
-    }
-    if arg
-        .bytes()
-        .all(|byte| byte.is_ascii_alphanumeric() || b"-_./:=+".contains(&byte))
-    {
-        return arg.to_string();
-    }
-    format!("'{}'", arg.replace('\'', "'\"'\"'"))
-}
-
-pub(crate) fn push_line_from_bytes(buffer: &mut Vec<u8>, tx: &Sender<AppEvent>) {
+pub(crate) fn push_line_from_bytes(buffer: &mut Vec<u8>, tx: &SyncSender<AppEvent>) {
     if buffer.is_empty() {
         return;
     }
 
-    let raw = String::from_utf8_lossy(buffer);
-    let cleaned = strip_ansi_and_controls(&raw);
+    let cleaned = String::from_utf8_lossy(buffer).trim().to_string();
     buffer.clear();
 
     if cleaned.is_empty() {
         return;
     }
     if let Some(sample) = parse_sample(&cleaned) {
-        let _ = tx.send(AppEvent::Sample(sample));
-        let _ = tx.send(AppEvent::Log(sample.summary_line()));
+        let mut status = FeatureStatus::unknown();
+        status.update_from_log(&cleaned);
+        let _ = tx.try_send(AppEvent::Sample(sample, status));
         return;
     }
-    let _ = tx.send(AppEvent::Log(cleaned));
-}
-
-pub(crate) fn strip_ansi_and_controls(input: &str) -> String {
-    #[derive(Clone, Copy)]
-    enum EscapeState {
-        None,
-        Esc,
-        Csi,
-        Osc,
-    }
-
-    let mut out = String::with_capacity(input.len());
-    let mut state = EscapeState::None;
-    for ch in input.chars() {
-        state = match state {
-            EscapeState::None => {
-                if ch == '\u{1b}' {
-                    EscapeState::Esc
-                } else {
-                    if !ch.is_control() || ch == '\t' {
-                        out.push(ch);
-                    }
-                    EscapeState::None
-                }
-            }
-            EscapeState::Esc => match ch {
-                '[' => EscapeState::Csi,
-                ']' => EscapeState::Osc,
-                _ => EscapeState::None,
-            },
-            EscapeState::Csi => {
-                if ('@'..='~').contains(&ch) {
-                    EscapeState::None
-                } else {
-                    EscapeState::Csi
-                }
-            }
-            EscapeState::Osc => {
-                if ch == '\u{7}' {
-                    EscapeState::None
-                } else {
-                    EscapeState::Osc
-                }
-            }
-        };
-    }
-    out.trim().to_string()
+    let _ = tx.try_send(AppEvent::Log(cleaned));
 }
 
 #[cfg(test)]
 mod tests {
     use std::sync::mpsc;
 
-    use super::{
-        CommandSource, Preset, StartupAction, parse_args_from, parse_sample, push_line_from_bytes,
-        strip_ansi_and_controls,
-    };
+    use super::{parse_args_from, parse_sample, push_line_from_bytes};
     use crate::host::{FeatureState, FeatureStatus, YawState};
 
     #[test]
-    fn parse_sample_accepts_probe_rs_defmt_line() {
-        let line = "7 [INFO ] state t_ms=100 quat=(0.9991181, -0.0028702, 0.0108203, 0.0401180) euler_deg=(0.1, 0.2, 2.3) velocity_m_s=(0.4, -0.2, 0.1) altitude_m=0.123 (rp235x_stemma_qt_9dof.rs:233)";
+    fn parse_sample_accepts_usb_line() {
+        let line = "state t_ms=100 quat=(0.9991181, -0.0028702, 0.0108203, 0.0401180) velocity_m_s=(0.4, -0.2, 0.1) altitude_m=0.123 mag_enabled=true mag_ready=false";
         let sample = parse_sample(line).expect("sample should parse");
 
         assert_eq!(sample.elapsed_ms, 100);
@@ -224,138 +154,84 @@ mod tests {
     }
 
     #[test]
-    fn parse_sample_accepts_altitude() {
-        let line = "7 [INFO ] state t_ms=100 quat=(0.9991181,-0.0028702,0.0108203,0.0401180) euler_deg=(0.1,0.2,2.3) velocity_m_s=(0.0,0.0,-0.2) altitude_m=0.33";
-        let sample = parse_sample(line).expect("sample should parse");
-
-        assert_eq!(sample.elapsed_ms, 100);
-        assert!((sample.velocity_world_m_s.z + 0.2).abs() < 1e-6);
-        assert!((sample.altitude_m - 0.33).abs() < 1e-6);
+    fn parse_sample_rejects_non_finite_values() {
+        let line =
+            "state t_ms=100 quat=(1.0,0.0,0.0,0.0) velocity_m_s=(0.0,0.0,0.0) altitude_m=NaN";
+        assert!(parse_sample(line).is_none());
     }
 
     #[test]
-    fn strip_ansi_preserves_probe_rs_log_text() {
-        let line = "\u{1b}[1m[\u{1b}[32mINFO \u{1b}[0m\u{1b}[1m]\u{1b}[0m boot";
-        assert_eq!(strip_ansi_and_controls(line), "[INFO ] boot");
+    fn parse_sample_rejects_zero_quaternion() {
+        let line =
+            "state t_ms=100 quat=(0.0,0.0,0.0,0.0) velocity_m_s=(0.0,0.0,0.0) altitude_m=0.0";
+        assert!(parse_sample(line).is_none());
     }
 
     #[test]
-    fn push_line_parses_sample_after_ansi_cleanup() {
-        let (tx, rx) = mpsc::channel();
-        let mut line =
-            b"\x1b[1m[\x1b[32mINFO \x1b[0m] state t_ms=100 quat=(0.9991181,-0.0028702,0.0108203,0.0401180) euler_deg=(0.1,0.2,2.3) velocity_m_s=(0.1,0.2,0.3) altitude_m=0.123"
-                .to_vec();
+    fn push_line_parses_usb_sample() {
+        let (tx, rx) = mpsc::sync_channel(4);
+        let mut line = b"state t_ms=100 quat=(0.9991181,-0.0028702,0.0108203,0.0401180) velocity_m_s=(0.1,0.2,0.3) altitude_m=0.123 mag_enabled=true mag_ready=false".to_vec();
 
         push_line_from_bytes(&mut line, &tx);
 
         let mut saw_sample = false;
-        let mut saw_log = false;
+        let mut saw_status = false;
         while let Ok(event) = rx.try_recv() {
             match event {
-                super::AppEvent::Sample(sample) => {
+                super::AppEvent::Sample(sample, status) => {
                     saw_sample = true;
+                    saw_status = status.magnetometer == FeatureState::Enabled;
                     assert_eq!(sample.elapsed_ms, 100);
                 }
-                super::AppEvent::Log(line) => {
-                    saw_log = true;
-                    assert!(line.contains("t=0.10s"));
-                    assert!(line.contains("attitude="));
-                    assert!(line.contains("velocity="));
-                }
+                super::AppEvent::Log(_) => panic!("sample must not be copied to logs"),
+                super::AppEvent::Disconnected(_) => panic!("unexpected disconnect"),
             }
         }
 
         assert!(saw_sample);
-        assert!(saw_log);
+        assert!(saw_status);
     }
 
     #[test]
-    fn parse_args_defaults_to_fusion_preset() {
-        let startup = parse_args_from(Vec::<String>::new()).expect("args should parse");
-
-        match startup {
-            StartupAction::Run(launch) => {
-                assert_eq!(launch.source, CommandSource::Preset(Preset::Fusion));
-                assert!(
-                    launch
-                        .command
-                        .iter()
-                        .any(|arg| arg == "rp235x_stemma_qt_9dof_lps25hb")
-                );
-            }
-        }
+    fn parse_args_requires_port() {
+        let error = parse_args_from(Vec::<String>::new()).expect_err("port should be required");
+        assert!(error.contains("--port PATH"));
     }
 
     #[test]
-    fn parse_args_accepts_imu_preset() {
-        let startup =
-            parse_args_from(vec!["--mode".to_string(), "imu".to_string()]).expect("args parse");
+    fn parse_args_accepts_port() {
+        let startup = parse_args_from(vec!["--port".to_string(), "/dev/ttyACM0".to_string()])
+            .expect("args parse");
 
-        match startup {
-            StartupAction::Run(launch) => {
-                assert_eq!(launch.source, CommandSource::Preset(Preset::ImuOnly));
-                assert!(
-                    launch
-                        .command
-                        .iter()
-                        .any(|arg| arg == "rp235x_stemma_qt_9dof")
-                );
-            }
-        }
+        assert_eq!(startup.path, "/dev/ttyACM0");
     }
 
     #[test]
     fn parse_args_help_returns_error_text() {
         let help = parse_args_from(vec!["--help".to_string()]).expect_err("help text");
         assert!(help.contains("imu-viz"));
-        assert!(help.contains("--mode imu|fusion"));
+        assert!(help.contains("--port PATH"));
     }
 
     #[test]
-    fn parse_args_treats_remaining_values_as_custom_command() {
-        let startup = parse_args_from(vec![
-            "--mode".to_string(),
-            "imu".to_string(),
-            "echo".to_string(),
-            "hello world".to_string(),
-        ])
-        .expect("args parse");
-
-        match startup {
-            StartupAction::Run(launch) => {
-                assert_eq!(launch.source, CommandSource::Custom);
-                assert_eq!(launch.command, vec!["echo", "hello world"]);
-            }
-        }
+    fn parse_args_rejects_unknown_arguments() {
+        let error = parse_args_from(vec!["--mode".to_string()]).expect_err("argument rejected");
+        assert!(error.contains("unknown argument"));
     }
 
     #[test]
-    fn feature_status_tracks_magnetometer_and_yaw_mode() {
-        let mut status = FeatureStatus::from_launch(&super::LaunchConfig {
-            source: CommandSource::Preset(Preset::ImuOnly),
-            command: Vec::new(),
-        });
+    fn feature_status_tracks_usb_metadata() {
+        let mut status = FeatureStatus::unknown();
 
-        status.update_from_log("LIS3MDL WHO_AM_I=61");
+        status.update_from_log("state mag_enabled=true mag_ready=false");
         assert_eq!(status.magnetometer, FeatureState::Enabled);
         assert_eq!(status.yaw, YawState::Relative);
 
-        status.update_from_log("mag calibration ready");
+        status.update_from_log("state mag_enabled=true mag_ready=true");
         assert_eq!(status.yaw, YawState::Absolute);
 
-        status.update_from_log("mag read failed");
+        status.update_from_log("state mag_enabled=false mag_ready=false");
         assert_eq!(status.magnetometer, FeatureState::Disabled);
         assert_eq!(status.yaw, YawState::Relative);
-    }
-
-    #[test]
-    fn feature_status_tracks_barometer_presence() {
-        let mut status = FeatureStatus::from_launch(&super::LaunchConfig {
-            source: CommandSource::Preset(Preset::Fusion),
-            command: Vec::new(),
-        });
-
-        status.update_from_log("LPS25HB WHO_AM_I=189");
-        assert_eq!(status.barometer, FeatureState::Enabled);
     }
 }

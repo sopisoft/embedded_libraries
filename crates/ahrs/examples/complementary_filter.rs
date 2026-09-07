@@ -1,4 +1,4 @@
-use ahrs::{AttitudeEstimator, ComplementaryAttitudeFilter};
+use ahrs::ComplementaryAttitudeFilter;
 use fugit::MicrosDurationU32;
 use glam::{EulerRot, Quat, Vec3};
 
@@ -8,15 +8,6 @@ fn euler_deg(q: Quat) -> Vec3 {
 }
 
 fn main() {
-    // The complementary filter is a good first AHRS because the inputs are simple:
-    // - gyroscope in rad/s,
-    // - accelerometer direction,
-    // - optionally magnetometer direction for yaw.
-    //
-    // This example simulates a stationary vehicle with a known attitude.
-    // We generate the "measured" gravity and magnetic field vectors in the body frame,
-    // feed them into the filter many times, and print the converged estimate.
-
     let true_orientation = Quat::from_euler(
         EulerRot::XYZ,
         12.0f32.to_radians(),
@@ -24,15 +15,13 @@ fn main() {
         35.0f32.to_radians(),
     );
 
-    // In this crate, a level stationary accelerometer points along +Z.
     let gravity_world = Vec3::Z;
     let magnetic_world = Vec3::X;
 
-    // Convert world-frame reference vectors into body-frame sensor readings.
     let accel_body = true_orientation.conjugate().mul_vec3(gravity_world);
     let mag_body = true_orientation.conjugate().mul_vec3(magnetic_world);
 
-    let mut filter = ComplementaryAttitudeFilter::new(0.05);
+    let mut filter = ComplementaryAttitudeFilter::with_correction_gain(0.05);
     let dt = MicrosDurationU32::from_millis(10);
 
     for _ in 0..400 {
@@ -45,7 +34,6 @@ fn main() {
         estimate_deg.x, estimate_deg.y, estimate_deg.z
     );
 
-    // The same filter can also be used with IMU-only updates when no magnetometer is present.
     filter.update_imu(Vec3::new(0.0, 0.0, 0.1), accel_body, dt);
     let after_gyro = euler_deg(filter.orientation());
     println!(

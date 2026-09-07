@@ -1,5 +1,6 @@
 use core::convert::Infallible;
 
+use control::SignedNormalized;
 use embedded_hal::pwm::{ErrorType, SetDutyCycle};
 use fugit::MicrosDurationU32;
 
@@ -59,7 +60,9 @@ fn symmetric_command_maps_centered_surfaces() {
         -90.0,
         90.0,
     );
-    servo.set_symmetric(-1.0).unwrap();
+    servo
+        .set_symmetric(SignedNormalized::saturated(-1.0))
+        .unwrap();
     let pwm = servo.release();
     assert_eq!(pwm.duty, 50);
 }
@@ -68,7 +71,11 @@ fn symmetric_command_maps_centered_surfaces() {
 fn servo_set_computes_multiple_pulses() {
     let range = ServoRange::default();
     let set = ServoSet::new([range, range, range]);
-    let pulses = set.pulse_widths_from_symmetric([0.0, 0.5, -0.5]);
+    let pulses = set.pulse_widths_from_symmetric([
+        SignedNormalized::ZERO,
+        SignedNormalized::saturated(0.5),
+        SignedNormalized::saturated(-0.5),
+    ]);
     assert_eq!(pulses[0].as_micros(), 1_500);
     assert!(pulses[1].as_micros() > 1_500);
     assert!(pulses[2].as_micros() < 1_500);
@@ -96,9 +103,25 @@ fn servo_bank_updates_mixed_borrows() {
             &mut left as &mut dyn ServoOutput<Error = Infallible>,
             &mut right as &mut dyn ServoOutput<Error = Infallible>,
         ]);
-        bank.set_symmetric([0.5, -0.5]).unwrap();
+        bank.set_pulse_widths([
+            MicrosDurationU32::from_micros(1_750),
+            MicrosDurationU32::from_micros(1_250),
+        ])
+        .unwrap();
     }
     let left = left.release();
     let right = right.release();
     assert!(left.duty > right.duty);
+}
+
+#[test]
+#[should_panic]
+fn servo_range_rejects_reversed_pulses() {
+    let _ = ServoRange::new(
+        MicrosDurationU32::from_micros(20_000),
+        MicrosDurationU32::from_micros(2_000),
+        MicrosDurationU32::from_micros(1_000),
+        -90.0,
+        90.0,
+    );
 }

@@ -7,7 +7,7 @@
 - 4-byte active-frame parser with checksum validation and stream re-synchronization
 - blocking distance reads over any `embedded_io::Read`
 - start / stop / baud-rate commands over any `embedded_io::Write`
-- host-runnable and RP2350 UART examples
+- host-runnable example; the RP2350 UART example is in `rp2350-examples`
 
 ## Akizuki Module Notes
 
@@ -34,10 +34,10 @@
 ## Examples
 
 - `examples/read_distance.rs`
-- `examples/rp235x_uart_tsd10.rs`
+- RP2350 hardware example is in `rp2350-examples`
 
 Build the RP2350 example with:
 
 ```bash
-cargo run -p tsd10 --example rp235x_uart_tsd10 --target thumbv8m.main-none-eabihf
+cargo rp2350 --example rp235x_uart_tsd10
 ```

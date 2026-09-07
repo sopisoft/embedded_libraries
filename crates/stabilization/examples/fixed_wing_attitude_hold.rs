@@ -1,13 +1,8 @@
-use control::{ControlAxes, ConventionalTailMixer};
+use control::{ControlAxes, ConventionalTailMixer, Normalized, SignedNormalized};
 use fugit::MicrosDurationU32;
-use stabilization::{Attitude, AxisErrorMode, CascadeAttitudeController, CascadeAxis, Vector3};
+use stabilization::{AxisErrorMode, CascadeAttitudeController, CascadeAxis, Vec3};
 
 fn main() {
-    // This example shows a complete fixed-wing stabilization chain:
-    // 1. start from a desired aircraft attitude,
-    // 2. run cascaded attitude -> rate PID loops,
-    // 3. feed the resulting axis commands into a conventional tail mixer.
-
     let mut roll_axis = CascadeAxis::new(
         control::PidController::new(5.0, 0.2, 0.0),
         control::PidController::new(0.8, 0.05, 0.01),
@@ -34,18 +29,16 @@ fn main() {
 
     let mut controller = CascadeAttitudeController::new(roll_axis, pitch_axis, yaw_axis);
 
-    // Example target: a shallow right bank with a small nose-up pitch target.
     let target_roll = 20.0f32.to_radians();
     let target_pitch = 5.0f32.to_radians();
     let target_yaw_rate = 10.0f32.to_radians();
 
-    // Example estimate from your AHRS and gyro:
-    let measured_attitude = Attitude::new(
+    let measured_attitude = Vec3::new(
         8.0f32.to_radians(),
         1.0f32.to_radians(),
         15.0f32.to_radians(),
     );
-    let measured_rates = Vector3::new(
+    let measured_rates = Vec3::new(
         12.0f32.to_radians(),
         (-2.0f32).to_radians(),
         3.0f32.to_radians(),
@@ -61,7 +54,6 @@ fn main() {
         dt,
     );
 
-    // The inner loop produces generic roll / pitch / yaw control efforts.
     println!(
         "Desired body rates [deg/s]: roll={:.1}, pitch={:.1}, yaw={:.1}",
         stabilized.desired_rates_rad_s.x.to_degrees(),
@@ -73,19 +65,18 @@ fn main() {
         stabilized.actuator.x, stabilized.actuator.y, stabilized.actuator.z
     );
 
-    // In a real aircraft, these outputs usually go to a mixer next.
     let mixer = ConventionalTailMixer::new();
     let surfaces = mixer.mix(ControlAxes::new(
-        stabilized.actuator.x,
-        stabilized.actuator.y,
-        stabilized.actuator.z,
-        0.55,
-        0.0,
+        SignedNormalized::saturated(stabilized.actuator.x),
+        SignedNormalized::saturated(stabilized.actuator.y),
+        SignedNormalized::saturated(stabilized.actuator.z),
+        Normalized::saturated(0.55),
+        Normalized::ZERO,
     ));
 
-    println!("Left aileron:  {:.3}", surfaces.left_aileron);
-    println!("Right aileron: {:.3}", surfaces.right_aileron);
-    println!("Elevator:      {:.3}", surfaces.elevator);
-    println!("Rudder:        {:.3}", surfaces.rudder);
-    println!("Throttle:      {:.3}", surfaces.throttle);
+    println!("Left aileron:  {:.3}", surfaces.left_aileron.get());
+    println!("Right aileron: {:.3}", surfaces.right_aileron.get());
+    println!("Elevator:      {:.3}", surfaces.elevator.get());
+    println!("Rudder:        {:.3}", surfaces.rudder.get());
+    println!("Throttle:      {:.3}", surfaces.throttle.get());
 }

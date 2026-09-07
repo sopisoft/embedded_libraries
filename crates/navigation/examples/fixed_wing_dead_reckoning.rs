@@ -8,13 +8,6 @@ fn euler_deg(q: Quat) -> Vec3 {
 }
 
 fn main() {
-    // This example demonstrates a very common fixed-wing navigation pattern:
-    // 1. set an initial attitude estimate,
-    // 2. propagate position from airspeed, gyro, and wind,
-    // 3. apply slower correction terms when extra information is available.
-    //
-    // The same pattern works for RC aircraft, small UAVs, and log replay tools.
-
     let mut navigator = FixedWingNavigator::new();
     navigator.set_attitude(Vec3::new(
         2.0f32.to_radians(),
@@ -22,23 +15,18 @@ fn main() {
         45.0f32.to_radians(),
     ));
 
-    // High-rate propagation inputs.
     let dt = MicrosDurationU32::from_millis(20);
     let wind = Vec2::new(4.0, -1.0);
     let gyro = Vec3::new(0.0, 0.0, 0.03);
 
-    // Propagate for one second at 22 m/s airspeed.
     let mut step = 0;
     while step < 50 {
         navigator.predict_airspeed(22.0, gyro, wind, dt);
         step += 1;
     }
 
-    // Later, a slower sensor such as GPS can tell us the actual ground velocity.
-    // Use that to refine the horizontal wind estimate.
     navigator.correct_wind_from_groundspeed(Vec3::new(18.0, 14.0, 1.5), 0.2);
 
-    // The underlying inertial navigator is public so you can apply additional corrections.
     navigator.navigator.correct_altitude(115.0, 0.3);
     navigator.navigator.correct_heading(0.80, 0.2);
 

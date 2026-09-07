@@ -1,13 +1,9 @@
 use core::convert::Infallible;
 
-use control::{ControlAxes, ConventionalTailMixer};
+use control::{ControlAxes, ConventionalTailMixer, Normalized, SignedNormalized};
 use embedded_hal::pwm::{ErrorType, SetDutyCycle};
 use fugit::MicrosDurationU32;
 use pwm::{Servo, ServoBank, ServoOutput, ServoRange, ServoSet};
-
-// This example demonstrates how to manage multiple servos with one shared set
-// of travel limits. The servos still own their individual PWM channels, but a
-// borrowed ServoBank lets us update them in one place.
 
 #[derive(Debug)]
 struct MockPwmChannel {
@@ -31,8 +27,6 @@ impl SetDutyCycle for MockPwmChannel {
 }
 
 fn main() {
-    // Shared servo timing for three control surfaces:
-    // left aileron, right aileron, elevator.
     let base = ServoRange::new(
         MicrosDurationU32::from_micros(20_000),
         MicrosDurationU32::from_micros(1_000),
@@ -48,35 +42,38 @@ fn main() {
             compare: 0,
             top: 20_000,
         },
-        ranges.range(0),
+        ranges.get(0).unwrap(),
     );
     let mut right_aileron = Servo::from_range(
         MockPwmChannel {
             compare: 0,
             top: 20_000,
         },
-        ranges.range(1),
+        ranges.get(1).unwrap(),
     );
     let mut elevator = Servo::from_range(
         MockPwmChannel {
             compare: 0,
             top: 20_000,
         },
-        ranges.range(2),
+        ranges.get(2).unwrap(),
     );
 
-    // A fixed-wing mixer usually sits one layer above the PWM library.
     let mixer = ConventionalTailMixer::new();
-    let outputs = mixer.mix(ControlAxes::new(0.4, -0.2, 0.0, 0.6, 0.0));
+    let outputs = mixer.mix(ControlAxes::new(
+        SignedNormalized::saturated(0.4),
+        SignedNormalized::saturated(-0.2),
+        SignedNormalized::ZERO,
+        Normalized::saturated(0.6),
+        Normalized::ZERO,
+    ));
 
-    // Convert multiple logical surface commands into multiple pulse widths.
     let pulses = ranges.pulse_widths_from_symmetric([
         outputs.left_aileron,
         outputs.right_aileron,
         outputs.elevator,
     ]);
 
-    // Apply the pulse widths to each servo channel.
     {
         let mut bank = ServoBank::new([
             &mut left_aileron as &mut dyn ServoOutput<Error = Infallible>,

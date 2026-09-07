@@ -1,13 +1,13 @@
 //! Reusable calibration helpers for IMU and magnetometer startup flows.
 
-use crate::{AccelGyroSample, Vector3};
+use crate::{AccelGyroSample, Vec3};
 use libm::sqrtf;
 
 /// Bias estimates for a stationary accelerometer and gyroscope.
 #[derive(Copy, Clone, Debug, Default, PartialEq)]
 pub struct ImuBiases {
-    pub accel_bias_m_s2: Vector3,
-    pub gyro_bias_rad_s: Vector3,
+    pub accel_bias_m_s2: Vec3,
+    pub gyro_bias_rad_s: Vec3,
 }
 
 /// Accumulates stationary IMU samples and derives bias estimates.
@@ -15,8 +15,8 @@ pub struct ImuBiases {
 pub struct StationaryImuCalibrator {
     required_samples: u32,
     collected_samples: u32,
-    accel_sum_m_s2: Vector3,
-    gyro_sum_rad_s: Vector3,
+    accel_sum_m_s2: Vec3,
+    gyro_sum_rad_s: Vec3,
     gravity_m_s2: f32,
 }
 
@@ -25,8 +25,8 @@ impl StationaryImuCalibrator {
         Self {
             required_samples,
             collected_samples: 0,
-            accel_sum_m_s2: Vector3::ZERO,
-            gyro_sum_rad_s: Vector3::ZERO,
+            accel_sum_m_s2: Vec3::ZERO,
+            gyro_sum_rad_s: Vec3::ZERO,
             gravity_m_s2,
         }
     }
@@ -44,8 +44,8 @@ impl StationaryImuCalibrator {
     }
 
     pub fn update(&mut self, sample: AccelGyroSample) {
-        self.accel_sum_m_s2 += sample.accel_m_s2;
-        self.gyro_sum_rad_s += sample.gyro_rad_s;
+        self.accel_sum_m_s2 += sample.accel_m_s2.vector();
+        self.gyro_sum_rad_s += sample.gyro_rad_s.vector();
         self.collected_samples = self.collected_samples.saturating_add(1);
     }
 
@@ -69,16 +69,16 @@ impl StationaryImuCalibrator {
 #[derive(Copy, Clone, Debug, Default, PartialEq)]
 pub struct AllanDeviationPoint {
     pub tau_s: f32,
-    pub deviation: Vector3,
+    pub deviation: Vec3,
     pub pairs: u32,
 }
 
 #[derive(Copy, Clone, Debug, Default, PartialEq)]
 pub struct AllanNoiseSummary {
-    pub accel_noise_density_m_s2_sqrt_s: Vector3,
-    pub accel_bias_instability_m_s2: Vector3,
-    pub gyro_noise_density_rad_s_sqrt_s: Vector3,
-    pub gyro_bias_instability_rad_s: Vector3,
+    pub accel_noise_density_m_s2_sqrt_s: Vec3,
+    pub accel_bias_instability_m_s2: Vec3,
+    pub gyro_noise_density_rad_s_sqrt_s: Vec3,
+    pub gyro_bias_instability_rad_s: Vec3,
     pub recommended_accel_stationary_tolerance_m_s2: f32,
     pub recommended_gyro_stationary_tolerance_rad_s: f32,
 }
@@ -95,10 +95,10 @@ pub struct AllanImuCalibration<const LEVELS: usize> {
 struct AllanLevel {
     cluster_len_samples: u32,
     cluster_count: u32,
-    cluster_sum: Vector3,
-    previous_average: Vector3,
+    cluster_sum: Vec3,
+    previous_average: Vec3,
     has_previous_average: bool,
-    delta_sum_sq: Vector3,
+    delta_sum_sq: Vec3,
     pairs: u32,
 }
 
@@ -107,15 +107,15 @@ impl AllanLevel {
         Self {
             cluster_len_samples,
             cluster_count: 0,
-            cluster_sum: Vector3::ZERO,
-            previous_average: Vector3::ZERO,
+            cluster_sum: Vec3::ZERO,
+            previous_average: Vec3::ZERO,
             has_previous_average: false,
-            delta_sum_sq: Vector3::ZERO,
+            delta_sum_sq: Vec3::ZERO,
             pairs: 0,
         }
     }
 
-    fn update(&mut self, sample: Vector3) {
+    fn update(&mut self, sample: Vec3) {
         self.cluster_sum += sample;
         self.cluster_count = self.cluster_count.saturating_add(1);
         if self.cluster_count < self.cluster_len_samples {
@@ -131,18 +131,18 @@ impl AllanLevel {
 
         self.previous_average = cluster_average;
         self.has_previous_average = true;
-        self.cluster_sum = Vector3::ZERO;
+        self.cluster_sum = Vec3::ZERO;
         self.cluster_count = 0;
     }
 
     fn point(&self, sample_period_s: f32) -> AllanDeviationPoint {
         let tau_s = self.cluster_len_samples as f32 * sample_period_s;
         let deviation = if self.pairs == 0 {
-            Vector3::ZERO
+            Vec3::ZERO
         } else {
             let inv_pairs = 0.5 / self.pairs as f32;
             let variance = self.delta_sum_sq * inv_pairs;
-            Vector3::new(
+            Vec3::new(
                 sqrtf(variance.x.max(0.0)),
                 sqrtf(variance.y.max(0.0)),
                 sqrtf(variance.z.max(0.0)),
@@ -171,7 +171,7 @@ impl<const LEVELS: usize> AllanAxisAnalyzer<LEVELS> {
         }
     }
 
-    fn update(&mut self, sample: Vector3) {
+    fn update(&mut self, sample: Vec3) {
         let mut index = 0usize;
         while index < LEVELS {
             self.levels[index].update(sample);
@@ -222,8 +222,8 @@ impl<const LEVELS: usize> AllanImuCalibrator<LEVELS> {
 
     pub fn update(&mut self, sample: AccelGyroSample) {
         self.stationary.update(sample);
-        self.accel_allan.update(sample.accel_m_s2);
-        self.gyro_allan.update(sample.gyro_rad_s);
+        self.accel_allan.update(sample.accel_m_s2.vector());
+        self.gyro_allan.update(sample.gyro_rad_s.vector());
     }
 
     pub fn finish(&self) -> Option<AllanImuCalibration<LEVELS>> {
@@ -271,8 +271,8 @@ impl AllanNoiseSummary {
 /// Online hard/soft-iron style magnetometer calibration from min/max tracking.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct MagnetometerCalibrator {
-    min_mgauss: Vector3,
-    max_mgauss: Vector3,
+    min_mgauss: Vec3,
+    max_mgauss: Vec3,
     initialized: bool,
     min_span_mgauss: f32,
 }
@@ -280,14 +280,14 @@ pub struct MagnetometerCalibrator {
 impl MagnetometerCalibrator {
     pub const fn new(min_span_mgauss: f32) -> Self {
         Self {
-            min_mgauss: Vector3::ZERO,
-            max_mgauss: Vector3::ZERO,
+            min_mgauss: Vec3::ZERO,
+            max_mgauss: Vec3::ZERO,
             initialized: false,
             min_span_mgauss,
         }
     }
 
-    pub fn update(&mut self, raw_mgauss: Vector3) -> Vector3 {
+    pub fn update(&mut self, raw_mgauss: Vec3) -> Vec3 {
         if !self.initialized {
             self.min_mgauss = raw_mgauss;
             self.max_mgauss = raw_mgauss;
@@ -304,7 +304,7 @@ impl MagnetometerCalibrator {
 
         let half_span = (self.max_mgauss - self.min_mgauss) * 0.5;
         let average_radius = (half_span.x + half_span.y + half_span.z) / 3.0;
-        Vector3::new(
+        Vec3::new(
             scale_axis(centered.x, half_span.x, average_radius),
             scale_axis(centered.y, half_span.y, average_radius),
             scale_axis(centered.z, half_span.z, average_radius),
@@ -326,19 +326,19 @@ impl MagnetometerCalibrator {
             && span.z >= self.min_span_mgauss
     }
 
-    pub fn offset_mgauss(&self) -> Vector3 {
+    pub fn offset_mgauss(&self) -> Vec3 {
         if self.initialized {
             (self.min_mgauss + self.max_mgauss) * 0.5
         } else {
-            Vector3::ZERO
+            Vec3::ZERO
         }
     }
 
-    pub fn span_mgauss(&self) -> Vector3 {
+    pub fn span_mgauss(&self) -> Vec3 {
         if self.initialized {
             self.max_mgauss - self.min_mgauss
         } else {
-            Vector3::ZERO
+            Vec3::ZERO
         }
     }
 }
@@ -351,8 +351,8 @@ fn scale_axis(value: f32, radius: f32, target_radius: f32) -> f32 {
     }
 }
 
-fn min_noise_density<const LEVELS: usize>(points: [AllanDeviationPoint; LEVELS]) -> Vector3 {
-    let mut best = Vector3::splat(f32::INFINITY);
+fn min_noise_density<const LEVELS: usize>(points: [AllanDeviationPoint; LEVELS]) -> Vec3 {
+    let mut best = Vec3::splat(f32::INFINITY);
     let mut index = 0usize;
     while index < LEVELS {
         let point = points[index];
@@ -367,8 +367,8 @@ fn min_noise_density<const LEVELS: usize>(points: [AllanDeviationPoint; LEVELS])
     best.map(|value| if value.is_finite() { value } else { 0.0 })
 }
 
-fn min_bias_instability<const LEVELS: usize>(points: [AllanDeviationPoint; LEVELS]) -> Vector3 {
-    let mut best = Vector3::splat(f32::INFINITY);
+fn min_bias_instability<const LEVELS: usize>(points: [AllanDeviationPoint; LEVELS]) -> Vec3 {
+    let mut best = Vec3::splat(f32::INFINITY);
     let mut index = 0usize;
     while index < LEVELS {
         let point = points[index];
@@ -381,7 +381,7 @@ fn min_bias_instability<const LEVELS: usize>(points: [AllanDeviationPoint; LEVEL
     best.map(|value| if value.is_finite() { value } else { 0.0 })
 }
 
-fn max_component(value: Vector3) -> f32 {
+fn max_component(value: Vec3) -> f32 {
     value.x.max(value.y).max(value.z)
 }
 
@@ -392,9 +392,9 @@ mod tests {
     #[test]
     fn stationary_calibrator_estimates_biases() {
         let mut calibrator = StationaryImuCalibrator::new(4, 9.80665);
-        let sample = AccelGyroSample::without_temperature(
-            Vector3::new(0.1, -0.2, 9.90665),
-            Vector3::new(0.01, -0.02, 0.03),
+        let sample = AccelGyroSample::from_vectors_without_temperature(
+            Vec3::new(0.1, -0.2, 9.90665),
+            Vec3::new(0.01, -0.02, 0.03),
         );
 
         for _ in 0..4 {
@@ -412,13 +412,13 @@ mod tests {
     fn magnetometer_calibrator_removes_offset_after_span() {
         let mut calibrator = MagnetometerCalibrator::new(50.0);
         let samples = [
-            Vector3::new(-70.0, -60.0, -55.0),
-            Vector3::new(130.0, -60.0, -55.0),
-            Vector3::new(-70.0, 140.0, -55.0),
-            Vector3::new(-70.0, -60.0, 145.0),
+            Vec3::new(-70.0, -60.0, -55.0),
+            Vec3::new(130.0, -60.0, -55.0),
+            Vec3::new(-70.0, 140.0, -55.0),
+            Vec3::new(-70.0, -60.0, 145.0),
         ];
 
-        let mut corrected = Vector3::ZERO;
+        let mut corrected = Vec3::ZERO;
         for sample in samples {
             corrected = calibrator.update(sample);
         }
@@ -427,7 +427,7 @@ mod tests {
         assert!(
             calibrator
                 .offset_mgauss()
-                .distance(Vector3::new(30.0, 40.0, 45.0))
+                .distance(Vec3::new(30.0, 40.0, 45.0))
                 < 1.0e-3
         );
         assert!(corrected.length() > 0.0);
@@ -435,11 +435,10 @@ mod tests {
 
     #[test]
     fn allan_calibrator_reports_bias_and_noise_summary() {
-        let mut calibrator =
-            AllanImuCalibrator::<4>::new(16, 9.80665, 0.01, [1, 2, 4, 8]);
-        let sample = AccelGyroSample::without_temperature(
-            Vector3::new(0.02, -0.01, 9.82665),
-            Vector3::new(0.005, -0.004, 0.003),
+        let mut calibrator = AllanImuCalibrator::<4>::new(16, 9.80665, 0.01, [1, 2, 4, 8]);
+        let sample = AccelGyroSample::from_vectors_without_temperature(
+            Vec3::new(0.02, -0.01, 9.82665),
+            Vec3::new(0.005, -0.004, 0.003),
         );
 
         for _ in 0..16 {

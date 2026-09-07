@@ -1,7 +1,11 @@
-use std::io::{BufReader, Read};
-use std::process::{Child, Command, Stdio};
-use std::sync::mpsc::{self, Sender};
+use std::io::{BufReader, ErrorKind, Read};
+use std::sync::mpsc::{self, SyncSender};
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 use std::thread;
+use std::time::Duration;
 
 use eframe::egui;
 use glam::{EulerRot, Quat, Vec3};
@@ -17,81 +21,12 @@ use parse::{parse_args, push_line_from_bytes};
 
 pub(crate) const HISTORY_LIMIT: usize = 600;
 pub(crate) const LOG_LIMIT: usize = 24;
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum Preset {
-    ImuOnly,
-    Fusion,
-}
-
-impl Preset {
-    fn from_cli(value: &str) -> Result<Self, String> {
-        match value {
-            "imu" | "imu-only" => Ok(Self::ImuOnly),
-            "fusion" => Ok(Self::Fusion),
-            _ => Err(format!(
-                "unknown mode `{value}`; expected `imu` or `fusion`"
-            )),
-        }
-    }
-
-    fn label(self) -> &'static str {
-        match self {
-            Self::ImuOnly => "imu",
-            Self::Fusion => "fusion",
-        }
-    }
-
-    fn command(self) -> Vec<String> {
-        match self {
-            Self::ImuOnly => vec![
-                "cargo".into(),
-                "run".into(),
-                "-p".into(),
-                "imu".into(),
-                "--example".into(),
-                "rp235x_stemma_qt_9dof".into(),
-                "--target".into(),
-                "thumbv8m.main-none-eabihf".into(),
-            ],
-            Self::Fusion => vec![
-                "cargo".into(),
-                "run".into(),
-                "-p".into(),
-                "imu".into(),
-                "--example".into(),
-                "rp235x_stemma_qt_9dof_lps25hb".into(),
-                "--target".into(),
-                "thumbv8m.main-none-eabihf".into(),
-            ],
-        }
-    }
-}
+const MAX_LINE_LENGTH: usize = 512;
+const EVENT_QUEUE_LIMIT: usize = 256;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum CommandSource {
-    Preset(Preset),
-    Custom,
-}
-
-impl CommandSource {
-    pub(crate) fn label(&self) -> &'static str {
-        match self {
-            Self::Preset(preset) => preset.label(),
-            Self::Custom => "custom",
-        }
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct LaunchConfig {
-    pub(crate) source: CommandSource,
-    pub(crate) command: Vec<String>,
-}
-
-#[derive(Debug)]
-pub(crate) enum StartupAction {
-    Run(LaunchConfig),
+pub(crate) struct PortConfig {
+    pub(crate) path: String,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -125,14 +60,14 @@ impl Sample {
         orientation: Quat,
         velocity_world_m_s: Vec3,
         altitude_m: f32,
-    ) -> Self {
-        let orientation = if orientation.length_squared() > 1.0e-12 {
-            orientation.normalize()
-        } else {
-            Quat::IDENTITY
-        };
+    ) -> Option<Self> {
+        let norm_squared = orientation.length_squared();
+        if !norm_squared.is_finite() || norm_squared <= 1.0e-12 {
+            return None;
+        }
+        let orientation = orientation.normalize();
         let (roll_rad, pitch_rad, yaw_rad) = orientation.to_euler(EulerRot::XYZ);
-        Self {
+        Some(Self {
             elapsed_ms,
             orientation,
             roll_deg: roll_rad.to_degrees(),
@@ -140,21 +75,7 @@ impl Sample {
             yaw_deg: yaw_rad.to_degrees(),
             velocity_world_m_s,
             altitude_m,
-        }
-    }
-
-    pub(crate) fn summary_line(self) -> String {
-        format!(
-            "t={:.2}s attitude=({:.1}, {:.1}, {:.1}) deg velocity=({:.2}, {:.2}, {:.2}) m/s altitude={:.3} m",
-            self.elapsed_ms as f32 / 1000.0,
-            self.roll_deg,
-            self.pitch_deg,
-            self.yaw_deg,
-            self.velocity_world_m_s.x,
-            self.velocity_world_m_s.y,
-            self.velocity_world_m_s.z,
-            self.altitude_m,
-        )
+        })
     }
 }
 
@@ -196,44 +117,28 @@ impl YawState {
 pub(crate) struct FeatureStatus {
     pub(crate) yaw: YawState,
     pub(crate) magnetometer: FeatureState,
-    pub(crate) barometer: FeatureState,
 }
 
 impl FeatureStatus {
-    pub(crate) fn from_launch(launch: &LaunchConfig) -> Self {
-        match launch.source {
-            CommandSource::Preset(Preset::ImuOnly) => Self {
-                yaw: YawState::Relative,
-                magnetometer: FeatureState::Unknown,
-                barometer: FeatureState::Disabled,
-            },
-            CommandSource::Preset(Preset::Fusion) => Self {
-                yaw: YawState::Relative,
-                magnetometer: FeatureState::Unknown,
-                barometer: FeatureState::Unknown,
-            },
-            CommandSource::Custom => Self {
-                yaw: YawState::Unknown,
-                magnetometer: FeatureState::Unknown,
-                barometer: FeatureState::Unknown,
-            },
+    pub(crate) const fn unknown() -> Self {
+        Self {
+            yaw: YawState::Unknown,
+            magnetometer: FeatureState::Unknown,
         }
     }
 
     pub(crate) fn update_from_log(&mut self, line: &str) {
-        if line.contains("LIS3MDL WHO_AM_I=") || line.contains("mag re-enabled") {
+        if line.contains("mag_enabled=true") {
             self.magnetometer = FeatureState::Enabled;
+            self.yaw = YawState::Relative;
         }
-        if line.contains("mag init failed") || line.contains("mag read failed") {
+        if line.contains("mag_enabled=false") {
             self.magnetometer = FeatureState::Disabled;
             self.yaw = YawState::Relative;
         }
-        if line.contains("mag calibration ready") {
+        if line.contains("mag_ready=true") {
             self.magnetometer = FeatureState::Enabled;
             self.yaw = YawState::Absolute;
-        }
-        if line.contains("LPS25HB WHO_AM_I=") {
-            self.barometer = FeatureState::Enabled;
         }
     }
 }
@@ -241,32 +146,41 @@ impl FeatureStatus {
 #[derive(Debug)]
 pub(crate) enum AppEvent {
     Log(String),
-    Sample(Sample),
+    Sample(Sample, FeatureStatus),
+    Disconnected(String),
 }
 
-fn spawn_reader<R: Read + Send + 'static>(reader: R, tx: Sender<AppEvent>) {
+fn spawn_reader<R: Read + Send + 'static>(
+    reader: R,
+    tx: SyncSender<AppEvent>,
+    stop: Arc<AtomicBool>,
+) {
     thread::spawn(move || {
         let mut reader = BufReader::new(reader);
         let mut chunk = [0u8; 1024];
         let mut pending = Vec::new();
 
-        loop {
+        while stop.load(Ordering::Relaxed) {
             match reader.read(&mut chunk) {
                 Ok(0) => {
                     push_line_from_bytes(&mut pending, &tx);
+                    let _ = tx.try_send(AppEvent::Disconnected("serial port closed".into()));
                     break;
                 }
                 Ok(count) => {
                     for byte in &chunk[..count] {
                         if matches!(*byte, b'\n' | b'\r') {
                             push_line_from_bytes(&mut pending, &tx);
-                        } else {
+                        } else if pending.len() < MAX_LINE_LENGTH {
                             pending.push(*byte);
                         }
                     }
                 }
+                Err(error)
+                    if matches!(error.kind(), ErrorKind::TimedOut | ErrorKind::WouldBlock) => {}
                 Err(error) => {
-                    let _ = tx.send(AppEvent::Log(format!("reader error: {error}")));
+                    let _ = tx.try_send(AppEvent::Log(format!("reader error: {error}")));
+                    let _ = tx.try_send(AppEvent::Disconnected(error.to_string()));
                     break;
                 }
             }
@@ -274,40 +188,16 @@ fn spawn_reader<R: Read + Send + 'static>(reader: R, tx: Sender<AppEvent>) {
     });
 }
 
-fn spawn_child(command: &[String], tx: Sender<AppEvent>) -> Result<Child, String> {
-    let program = command
-        .first()
-        .ok_or_else(|| "empty command".to_string())?
-        .clone();
-    let mut child = Command::new(program);
-    child
-        .args(&command[1..])
-        .env("CARGO_TERM_COLOR", "never")
-        .env("CARGO_TERM_PROGRESS_WHEN", "never")
-        .env("CLICOLOR", "0")
-        .env("NO_COLOR", "1")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-
-    let mut child = child
-        .spawn()
-        .map_err(|error| format!("failed to spawn command: {error}"))?;
-
-    if let Some(stdout) = child.stdout.take() {
-        spawn_reader(stdout, tx.clone());
-    }
-    if let Some(stderr) = child.stderr.take() {
-        spawn_reader(stderr, tx.clone());
-    }
-
-    Ok(child)
-}
-
 pub fn run() -> Result<(), String> {
-    let StartupAction::Run(launch) = parse_args()?;
+    let port = parse_args()?;
+    let serial = serialport::new(&port.path, 115_200)
+        .timeout(Duration::from_millis(100))
+        .open()
+        .map_err(|error| format!("failed to open {}: {error}", port.path))?;
 
-    let (tx, rx) = mpsc::channel();
-    let child = spawn_child(&launch.command, tx)?;
+    let (tx, rx) = mpsc::sync_channel(EVENT_QUEUE_LIMIT);
+    let stop = Arc::new(AtomicBool::new(true));
+    spawn_reader(serial, tx, stop.clone());
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -319,7 +209,7 @@ pub fn run() -> Result<(), String> {
     eframe::run_native(
         "imu-viz",
         options,
-        Box::new(move |_cc| Ok(Box::new(ImuVizApp::new(launch, rx, child)))),
+        Box::new(move |_cc| Ok(Box::new(ImuVizApp::new(port, rx, stop)))),
     )
     .map_err(|error| error.to_string())
 }

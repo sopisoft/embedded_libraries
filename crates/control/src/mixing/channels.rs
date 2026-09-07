@@ -1,19 +1,100 @@
-/// Pilot or autopilot axis commands.
-///
-/// Roll, pitch, and yaw are expected in `[-1, 1]`.
-/// Throttle and flaps are expected in `[0, 1]`.
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, PartialOrd)]
+pub struct SignedNormalized(f32);
+
+impl SignedNormalized {
+    pub const ZERO: Self = Self(0.0);
+
+    pub const fn new(value: f32) -> Option<Self> {
+        if value >= -1.0 && value <= 1.0 {
+            Some(Self(value))
+        } else {
+            None
+        }
+    }
+
+    pub const fn saturated(value: f32) -> Self {
+        if value.is_nan() {
+            Self::ZERO
+        } else if value < -1.0 {
+            Self(-1.0)
+        } else if value > 1.0 {
+            Self(1.0)
+        } else {
+            Self(value)
+        }
+    }
+
+    pub const fn get(self) -> f32 {
+        self.0
+    }
+
+    pub fn abs(self) -> f32 {
+        self.0.abs()
+    }
+}
+
+impl From<SignedNormalized> for f32 {
+    fn from(value: SignedNormalized) -> Self {
+        value.get()
+    }
+}
+
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, PartialOrd)]
+pub struct Normalized(f32);
+
+impl Normalized {
+    pub const ZERO: Self = Self(0.0);
+    pub const ONE: Self = Self(1.0);
+
+    pub const fn new(value: f32) -> Option<Self> {
+        if value >= 0.0 && value <= 1.0 {
+            Some(Self(value))
+        } else {
+            None
+        }
+    }
+
+    pub const fn saturated(value: f32) -> Self {
+        if value.is_nan() || value < 0.0 {
+            Self::ZERO
+        } else if value > 1.0 {
+            Self(1.0)
+        } else {
+            Self(value)
+        }
+    }
+
+    pub const fn get(self) -> f32 {
+        self.0
+    }
+}
+
+impl From<Normalized> for f32 {
+    fn from(value: Normalized) -> Self {
+        value.get()
+    }
+}
+
 #[derive(Copy, Clone, Debug, Default, PartialEq)]
 pub struct ControlAxes {
-    pub roll: f32,
-    pub pitch: f32,
-    pub yaw: f32,
-    pub throttle: f32,
-    pub flaps: f32,
+    pub roll: SignedNormalized,
+    pub pitch: SignedNormalized,
+    pub yaw: SignedNormalized,
+    pub throttle: Normalized,
+    pub flaps: Normalized,
 }
 
 impl ControlAxes {
     /// Creates a new command block.
-    pub const fn new(roll: f32, pitch: f32, yaw: f32, throttle: f32, flaps: f32) -> Self {
+    pub const fn new(
+        roll: SignedNormalized,
+        pitch: SignedNormalized,
+        yaw: SignedNormalized,
+        throttle: Normalized,
+        flaps: Normalized,
+    ) -> Self {
         Self {
             roll,
             pitch,
@@ -27,11 +108,11 @@ impl ControlAxes {
 /// Output shaping for a symmetric servo channel.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct SurfaceChannel {
-    pub scale: f32,
-    pub trim: f32,
-    pub reversed: bool,
-    pub min: f32,
-    pub max: f32,
+    scale: f32,
+    trim: f32,
+    reversed: bool,
+    min: f32,
+    max: f32,
 }
 
 impl SurfaceChannel {
@@ -46,22 +127,41 @@ impl SurfaceChannel {
         }
     }
 
+    pub const fn with_trim(mut self, trim: f32) -> Self {
+        self.trim = trim;
+        self
+    }
+
+    pub const fn with_reverse(mut self, reversed: bool) -> Self {
+        self.reversed = reversed;
+        self
+    }
+
+    pub fn with_limits(mut self, min: f32, max: f32) -> Self {
+        let min = SignedNormalized::saturated(min).get();
+        let max = SignedNormalized::saturated(max).get();
+        self.min = min.min(max);
+        self.max = min.max(max);
+        self
+    }
+
     /// Shapes a symmetric command into a bounded output.
-    pub fn apply(&self, command: f32) -> f32 {
+    pub fn apply(&self, command: SignedNormalized) -> SignedNormalized {
+        let command = command.get();
         let mut output = command * self.scale + self.trim;
         if self.reversed {
             output = -output;
         }
-        output.clamp(self.min, self.max)
+        SignedNormalized::saturated(output.clamp(self.min, self.max))
     }
 }
 
 /// Output shaping for throttle-like channels.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct ThrottleChannel {
-    pub min: f32,
-    pub max: f32,
-    pub reversed: bool,
+    min: f32,
+    max: f32,
+    reversed: bool,
 }
 
 impl ThrottleChannel {
@@ -74,15 +174,30 @@ impl ThrottleChannel {
         }
     }
 
+    pub const fn with_reverse(mut self, reversed: bool) -> Self {
+        self.reversed = reversed;
+        self
+    }
+
+    pub fn with_limits(mut self, min: f32, max: f32) -> Self {
+        let min = Normalized::saturated(min).get();
+        let max = Normalized::saturated(max).get();
+        self.min = min.min(max);
+        self.max = min.max(max);
+        self
+    }
+
     /// Shapes a unipolar command into a bounded output.
-    pub fn apply(&self, command: f32) -> f32 {
-        let command = command.clamp(0.0, 1.0);
+    pub fn apply(&self, command: Normalized) -> Normalized {
+        let command = command.get();
         let command = if self.reversed {
             1.0 - command
         } else {
             command
         };
-        (self.min + (self.max - self.min) * command).clamp(self.min, self.max)
+        Normalized::saturated(
+            (self.min + (self.max - self.min) * command).clamp(self.min, self.max),
+        )
     }
 }
 

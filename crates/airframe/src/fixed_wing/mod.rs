@@ -7,7 +7,7 @@ mod tests;
 mod vtail;
 
 pub use backend::{
-    AttitudeHoldLimits, AttitudeHoldOutput, DefaultAttitudeController, FixedWingAttitudeBackend,
+    AttitudeControl, AttitudeHoldLimits, DefaultAttitudeController, FixedWingAttitudeBackend,
 };
 pub use common::{ServoAssignment, ServoCommandMode};
 pub use conventional::{FixedWingControlOutput, FixedWingController, ServoMap};

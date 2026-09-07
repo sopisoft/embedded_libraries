@@ -6,7 +6,7 @@
 extern crate std;
 
 pub mod complementary;
-pub mod traits;
+pub mod madgwick;
 
 pub use complementary::ComplementaryAttitudeFilter;
-pub use traits::AttitudeEstimator;
+pub use madgwick::Madgwick;

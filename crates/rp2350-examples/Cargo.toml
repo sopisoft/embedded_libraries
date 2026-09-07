@@ -1,0 +1,95 @@
+[package]
+name = "rp2350-examples"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+build = "build.rs"
+
+[[example]]
+name = "rp2350"
+required-features = ["rp2350"]
+
+[[example]]
+name = "rp235x_crsf_uart_rx"
+required-features = ["rp2350"]
+
+[[example]]
+name = "rp235x_crsf_uart_tx"
+required-features = ["rp2350"]
+
+[[example]]
+name = "rp235x_four_servo_pico2"
+required-features = ["rp2350"]
+
+[[example]]
+name = "rp235x_i2c_lps25hb"
+required-features = ["rp2350"]
+
+[[example]]
+name = "rp235x_spi_lps25hb"
+required-features = ["rp2350"]
+
+[[example]]
+name = "rp235x_spi_mcp3208"
+required-features = ["rp2350"]
+
+[[example]]
+name = "rp235x_spi_mcp3208_scan_all"
+required-features = ["rp2350"]
+
+[[example]]
+name = "rp235x_servo_pico2"
+required-features = ["rp2350"]
+
+[[example]]
+name = "rp235x_stemma_qt_9dof"
+required-features = ["rp2350"]
+
+[[example]]
+name = "rp235x_stemma_qt_9dof_lps25hb"
+required-features = ["rp2350"]
+
+[[example]]
+name = "rp235x_stemma_qt_dynamic_calibration"
+required-features = ["rp2350"]
+
+[[example]]
+name = "rp235x_stemma_qt_static_calibration"
+required-features = ["rp2350"]
+
+[[example]]
+name = "rp235x_uart_tsd10"
+required-features = ["rp2350"]
+
+[features]
+rp2350 = []
+
+[lib]
+test = false
+doctest = false
+
+[dependencies]
+control = { path = "../control" }
+defmt = { workspace = true }
+defmt-rtt = { workspace = true }
+embedded-hal = { workspace = true }
+elrs = { path = "../elrs" }
+fc = { path = "../fc" }
+fugit = { workspace = true }
+gs1502 = { path = "../gs1502" }
+heapless = { workspace = true }
+imu = { path = "../imu" }
+libm = { workspace = true }
+linked_list_allocator = "0.10"
+lis3mdl = { path = "../lis3mdl" }
+lps25hb = { path = "../lps25hb" }
+lsm6ds3tr = "0.2"
+mcp3208 = { path = "../mcp3208" }
+panic-halt = "1.0"
+panic-probe = { workspace = true }
+pio = "0.3"
+pwm = { path = "../pwm" }
+rp235x-hal = { version = "0.4", features = ["binary-info", "critical-section-impl", "rt"] }
+tsd10 = { path = "../tsd10" }
+usb-device = "0.3"
+usbd-serial = "0.2"

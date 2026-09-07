@@ -1,11 +1,12 @@
 use control::{ControlAxes, ConventionalTailMixer, ConventionalTailOutputs};
 use fugit::MicrosDurationU32;
-use pwm::{ServoBank, ServoSet};
+use pwm::ServoSet;
 
-use crate::{Attitude, PilotCommand, Vector3};
+use crate::{PilotCommand, Vec3};
 
 use super::{
     AttitudeHoldLimits, DefaultAttitudeController, FixedWingAttitudeBackend,
+    backend::{attitude_hold_axes, manual_axes},
     common::{ServoAssignment, apply_assignment, neutral_pulses},
 };
 
@@ -44,6 +45,22 @@ impl ServoMap {
             left_flap: Some(ServoAssignment::normalized(5)),
             right_flap: Some(ServoAssignment::normalized(6)),
         }
+    }
+
+    const fn is_valid<const N: usize>(&self) -> bool {
+        self.left_aileron.index < N
+            && self.right_aileron.index < N
+            && self.elevator.index < N
+            && self.rudder.index < N
+            && self.throttle.index < N
+            && match self.left_flap {
+                Some(assignment) => assignment.index < N,
+                None => true,
+            }
+            && match self.right_flap {
+                Some(assignment) => assignment.index < N,
+                None => true,
+            }
     }
 
     pub fn to_pulses<const N: usize>(
@@ -85,12 +102,6 @@ pub struct FixedWingControlOutput<const N: usize> {
     pub pulses: [MicrosDurationU32; N],
 }
 
-impl<const N: usize> FixedWingControlOutput<N> {
-    pub fn apply_to_servo_bank<E>(&self, bank: &mut ServoBank<'_, E, N>) -> Result<(), E> {
-        bank.set_pulse_widths(self.pulses)
-    }
-}
-
 /// Sensor-agnostic fixed-wing controller.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct FixedWingController<const N: usize, C = DefaultAttitudeController> {
@@ -109,6 +120,7 @@ impl<const N: usize, C> FixedWingController<N, C> {
         servo_map: ServoMap,
         limits: AttitudeHoldLimits,
     ) -> Self {
+        assert!(servo_map.is_valid::<N>());
         Self {
             attitude_hold,
             mixer,
@@ -119,13 +131,10 @@ impl<const N: usize, C> FixedWingController<N, C> {
     }
 
     pub fn update_manual(&self, pilot: PilotCommand) -> FixedWingControlOutput<N> {
-        let axes = ControlAxes::new(
-            pilot.roll,
-            pilot.pitch,
-            pilot.yaw,
-            pilot.throttle,
-            pilot.flaps,
-        );
+        self.output(manual_axes(pilot))
+    }
+
+    fn output(&self, axes: ControlAxes) -> FixedWingControlOutput<N> {
         let surfaces = self.mixer.mix(axes);
         let pulses = self.servo_map.to_pulses(surfaces, &self.servos);
         FixedWingControlOutput {
@@ -138,42 +147,29 @@ impl<const N: usize, C> FixedWingController<N, C> {
     pub fn update_attitude_hold(
         &mut self,
         pilot: PilotCommand,
-        measured_attitude: Attitude,
-        measured_rates_rad_s: Vector3,
+        measured_attitude: Vec3,
+        measured_rates_rad_s: Vec3,
         dt: MicrosDurationU32,
     ) -> FixedWingControlOutput<N>
     where
         C: FixedWingAttitudeBackend,
     {
-        let stabilized = self.attitude_hold.update_fixed_wing(
-            pilot.roll * self.limits.max_roll_rad,
-            pilot.pitch * self.limits.max_pitch_rad,
-            pilot.yaw * self.limits.max_yaw_rate_rad_s,
+        let axes = attitude_hold_axes(
+            &mut self.attitude_hold,
+            self.limits,
+            pilot,
             measured_attitude,
             measured_rates_rad_s,
             dt,
         );
-        let axes = ControlAxes::new(
-            stabilized.actuator.x,
-            stabilized.actuator.y,
-            stabilized.actuator.z,
-            pilot.throttle,
-            pilot.flaps,
-        );
-        let surfaces = self.mixer.mix(axes);
-        let pulses = self.servo_map.to_pulses(surfaces, &self.servos);
-        FixedWingControlOutput {
-            axes,
-            surfaces,
-            pulses,
-        }
+        self.output(axes)
     }
 
     pub fn update_selected(
         &mut self,
         pilot: PilotCommand,
-        measured_attitude: Attitude,
-        measured_rates_rad_s: Vector3,
+        measured_attitude: Vec3,
+        measured_rates_rad_s: Vec3,
         dt: MicrosDurationU32,
     ) -> FixedWingControlOutput<N>
     where

@@ -1,10 +1,10 @@
 use core::convert::Infallible;
 
+use control::Normalized;
 use embedded_hal::pwm::{ErrorType, SetDutyCycle};
 use fugit::MicrosDurationU32;
 use pwm::Esc;
 
-// Replace this mock type with the PWM channel from your board support crate.
 #[derive(Debug)]
 struct MockPwmChannel {
     compare: u16,
@@ -27,11 +27,6 @@ impl SetDutyCycle for MockPwmChannel {
 }
 
 fn main() {
-    // Hobby ESCs commonly use the same electrical pulse format as a servo:
-    // 20 ms frame period and roughly 1000..2000 us pulse width.
-    // The difference is at the application layer:
-    // - a servo is usually commanded by angle,
-    // - an ESC is usually commanded by throttle.
     let pwm_channel = MockPwmChannel {
         compare: 0,
         top: 20_000,
@@ -44,11 +39,9 @@ fn main() {
         MicrosDurationU32::from_micros(2_000),
     );
 
-    // A real system usually performs its own arming or safety checks before
-    // accepting throttle commands. This helper only maps throttle to pulse width.
-    esc.set_throttle(0.0).unwrap();
-    esc.set_throttle(0.35).unwrap();
-    esc.set_throttle(0.70).unwrap();
+    esc.set_throttle(Normalized::ZERO).unwrap();
+    esc.set_throttle(Normalized::saturated(0.35)).unwrap();
+    esc.set_throttle(Normalized::saturated(0.70)).unwrap();
 
     let pwm_channel = esc.release();
     println!(

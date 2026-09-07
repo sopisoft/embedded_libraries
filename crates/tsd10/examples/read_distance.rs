@@ -1,9 +1,3 @@
-// This example is intentionally host-runnable so you can understand the TSD10
-// API without hardware first.
-//
-// On a real board, replace `FakeUart` with your UART peripheral or USB-serial
-// adapter type that implements `embedded_io::Read + embedded_io::Write`.
-
 use core::convert::Infallible;
 use embedded_io::{ErrorType, Read, Write};
 use std::{collections::VecDeque, vec::Vec};
@@ -55,8 +49,6 @@ impl Write for FakeUart {
 }
 
 fn main() {
-    // Pretend the UART stream starts mid-frame, then eventually delivers one
-    // valid distance sample of 1234 mm.
     let uart = FakeUart::from_rx(&[0x99, 0x00, 0x5C, 0xD2, 0x04, 0x29]);
     let mut lidar = Tsd10::new(uart);
 

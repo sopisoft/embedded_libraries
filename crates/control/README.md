@@ -10,6 +10,9 @@ Control primitives for embedded vehicles.
 - Fixed-wing surface mixers:
   `ConventionalTailMixer`, `ElevonMixer`, `VTailMixer`
 
+Normalized commands use `SignedNormalized` (`[-1, 1]`) and `Normalized` (`[0, 1]`),
+so mixer and actuator boundaries cannot receive an out-of-range command.
+
 ## Typical Use
 
 Use this crate when you need the low-level control blocks but do not yet want a full aircraft pipeline.

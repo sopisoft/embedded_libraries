@@ -5,16 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+control = { path = "../control" }
 embedded-hal = { workspace = true }
 fugit = { workspace = true }
 libm = { workspace = true }
-
-[dev-dependencies]
-control = { path = "../control" }
-
-[target.'thumbv8m.main-none-eabihf'.dependencies]
-panic-halt = "1.0"
-
-[target.'thumbv8m.main-none-eabihf'.dependencies.rp235x-hal]
-version = "0.4"
-features = ["binary-info", "critical-section-impl", "rt"]

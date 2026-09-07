@@ -1,4 +1,3 @@
-use crate::{i2c::I2cInterface, spi::SpiInterface};
 use crate::{
     interface::RegisterInterface,
     registers::{
@@ -111,14 +110,10 @@ where
         self.update_register(CTRL_REG2, !CTRL_REG2_BOOT, CTRL_REG2_BOOT)
     }
 
-    /// Copies the current pressure into the reference registers and enables
-    /// differential pressure output.
     pub fn enable_autozero(&mut self) -> Result<(), Error<IF::Error>> {
         self.update_register(CTRL_REG2, !CTRL_REG2_AUTOZERO, CTRL_REG2_AUTOZERO)
     }
 
-    /// Triggers a one-shot conversion when the device is configured for
-    /// one-shot mode (`ODR = 000`).
     pub fn trigger_one_shot(&mut self) -> Result<(), Error<IF::Error>> {
         self.update_register(CTRL_REG2, !CTRL_REG2_ONE_SHOT, CTRL_REG2_ONE_SHOT)
     }
@@ -192,8 +187,6 @@ where
         self.write_many(RPDS_L, &counts.to_le_bytes())
     }
 
-    /// Applies the RPDS one-point calibration from a measured and a trusted
-    /// reference pressure.
     pub fn apply_one_point_calibration(
         &mut self,
         measured_pressure_hpa: f32,
@@ -237,9 +230,3 @@ where
         self.write_register(register, (current & keep_mask) | set_bits)
     }
 }
-
-#[allow(dead_code)]
-type _Interfaces<I2C, SPI, CS> = (
-    core::marker::PhantomData<I2cInterface<I2C>>,
-    core::marker::PhantomData<SpiInterface<SPI, CS>>,
-);

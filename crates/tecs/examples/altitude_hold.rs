@@ -3,16 +3,6 @@ use fugit::MicrosDurationU32;
 use tecs::{TecsConfig, TecsController, TecsState, TecsTarget};
 
 fn main() {
-    // This example shows the smallest useful TECS setup for a fixed-wing aircraft.
-    //
-    // TECS splits the job into two coordinated commands:
-    // - throttle controls total energy,
-    // - pitch controls the balance between altitude energy and speed energy.
-    //
-    // In practice:
-    // - if the aircraft is low, TECS tends to add throttle and pitch up,
-    // - if the aircraft is slow, TECS tends to add throttle and lower the nose.
-
     let mut total_energy_pid = PidController::new(0.004, 0.001, 0.0);
     total_energy_pid.set_output_limits(-0.35, 0.45);
     total_energy_pid.set_integral_limits(-40.0, 40.0);
@@ -32,10 +22,8 @@ fn main() {
     );
     let mut tecs = TecsController::new(total_energy_pid, balance_pid, config);
 
-    // Command a modest climb while also asking for a slightly faster cruise speed.
     let target = TecsTarget::new(125.0, 18.0);
 
-    // Measured state from your estimator and airspeed source.
     let state = TecsState::new(100.0, 16.5);
 
     let output = tecs.update(target, state, MicrosDurationU32::from_millis(20));

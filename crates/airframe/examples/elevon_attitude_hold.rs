@@ -6,12 +6,6 @@ use pwm::{ServoRange, ServoSet};
 use stabilization::{AxisErrorMode, CascadeAttitudeController, CascadeAxis};
 
 fn main() {
-    // This example targets delta-wing or flying-wing aircraft with two elevons.
-    // The controller handles:
-    // 1. ELRS stick decoding,
-    // 2. optional roll/pitch attitude hold,
-    // 3. final left/right elevon commands plus throttle pulse generation.
-
     let rc_config = RcInputConfig::conventional_aetr();
     let channels = RcChannels::from_micros([
         1_650, 1_420, 1_400, 1_500, 1_800, 1_000, 1_000, 1_000, 1_000, 1_000, 1_000, 1_000, 1_000,
@@ -66,18 +60,20 @@ fn main() {
 
     let output = controller.update_selected(
         pilot,
-        airframe::Attitude::new(
+        airframe::Vec3::new(
             5.0f32.to_radians(),
             1.0f32.to_radians(),
             20.0f32.to_radians(),
         ),
-        airframe::Vector3::new(0.10, -0.02, 0.01),
+        airframe::Vec3::new(0.10, -0.02, 0.01),
         MicrosDurationU32::from_millis(10),
     );
 
     println!(
         "Elevons: left={:.3} right={:.3} throttle={:.3}",
-        output.surfaces.left_elevon, output.surfaces.right_elevon, output.surfaces.throttle
+        output.surfaces.left_elevon.get(),
+        output.surfaces.right_elevon.get(),
+        output.surfaces.throttle.get()
     );
     println!(
         "Pulse widths [us]: {:?}",

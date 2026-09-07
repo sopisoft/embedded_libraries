@@ -1,3 +1,4 @@
+use control::{Normalized, SignedNormalized};
 use embedded_hal::pwm::SetDutyCycle;
 use fugit::MicrosDurationU32;
 
@@ -45,12 +46,12 @@ impl<PWM: SetDutyCycle> Servo<PWM> {
     }
 
     /// Sets the servo position as a normalized value in `[0, 1]`.
-    pub fn set_normalized(&mut self, position: f32) -> Result<(), PWM::Error> {
+    pub fn set_normalized(&mut self, position: Normalized) -> Result<(), PWM::Error> {
         self.set_pulse_width(self.range.pulse_for_normalized(position))
     }
 
     /// Sets the servo position from a symmetric command in `[-1, 1]`.
-    pub fn set_symmetric(&mut self, command: f32) -> Result<(), PWM::Error> {
+    pub fn set_symmetric(&mut self, command: SignedNormalized) -> Result<(), PWM::Error> {
         self.set_pulse_width(self.range.pulse_for_symmetric(command))
     }
 
@@ -73,22 +74,6 @@ impl<PWM: SetDutyCycle> Servo<PWM> {
 
 impl<PWM: SetDutyCycle> ServoOutput for Servo<PWM> {
     type Error = PWM::Error;
-
-    fn set_normalized(&mut self, position: f32) -> Result<(), Self::Error> {
-        Servo::set_normalized(self, position)
-    }
-
-    fn set_symmetric(&mut self, command: f32) -> Result<(), Self::Error> {
-        Servo::set_symmetric(self, command)
-    }
-
-    fn set_angle_degrees(&mut self, angle_deg: f32) -> Result<(), Self::Error> {
-        Servo::set_angle_degrees(self, angle_deg)
-    }
-
-    fn set_angle_radians(&mut self, angle_rad: f32) -> Result<(), Self::Error> {
-        Servo::set_angle_radians(self, angle_rad)
-    }
 
     fn set_pulse_width(&mut self, pulse: MicrosDurationU32) -> Result<(), Self::Error> {
         Servo::set_pulse_width(self, pulse)
